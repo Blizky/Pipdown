@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pipdown</title>
+    <link rel="icon" type="image/svg+xml" href="/assets/svg/fabicon.svg" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="pipdown-app">
+      <header class="pipdown-topbar">
+        <div class="topbar-left">
+          <button id="backBtn" class="icon-btn" aria-label="Back">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M14.5 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
+        <div id="titleText" class="topbar-title">Pipdown</div>
+        <div class="topbar-actions">
+          <button id="selectToggle" class="icon-btn select-btn" aria-label="Select files">
+            <span class="select-text">Select</span>
+          </button>
+          <button id="shareBtn" class="icon-btn select-action is-hidden" aria-label="Share selected">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 16V4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+              <path d="M8 8l4-4 4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M6 16v3a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            </svg>
+          </button>
+          <button id="deleteBtn" class="icon-btn select-action is-hidden" aria-label="Delete selected">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 7h16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+              <path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+              <path d="M8 7l1 12a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1l1-12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            </svg>
+          </button>
+          <button id="undoBtn" class="icon-btn select-action is-hidden" aria-label="Undo delete">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M7 7H3v4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M3 11a8 8 0 1 0 2.3-5.7L3 7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <button id="menuToggle" class="icon-btn" aria-label="Menu">
+            <span class="menu-icon" aria-hidden="true">
+              <span></span>
+              <span></span>
+              <span></span>
+            </span>
+          </button>
+        </div>
+      </header>
+
+      <div id="menuPanel" class="menu-panel" aria-hidden="true">
+        <div class="menu-card">
+          <button id="menuConnect" class="menu-item" type="button">Connect Dropbox</button>
+          <button id="menuDisconnect" class="menu-item" type="button">Disconnect</button>
+          <button id="menuRefresh" class="menu-item" type="button">Refresh</button>
+          <button id="menuNewFile" class="menu-item" type="button">New File</button>
+          <button id="menuNewFolder" class="menu-item" type="button">New Folder</button>
+        </div>
+      </div>
+
+      <div id="statusText" class="status-text">Connect Dropbox to get started.</div>
+
+      <main class="pipdown-content">
+        <section id="browserView" class="pipdown-view is-active">
+          <div id="fileList" class="file-list"></div>
+          <button id="connectBtn" class="primary-btn" type="button">Connect Dropbox</button>
+        </section>
+
+        <section id="editorView" class="pipdown-view">
+          <div id="editorWysiwyg" class="editor wysiwyg" contenteditable="true" spellcheck="true"></div>
+          <textarea id="editorCode" class="editor code" spellcheck="false"></textarea>
+        </section>
+      </main>
+    </div>
+
+    <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
