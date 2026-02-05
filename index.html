@@ -11,37 +11,26 @@
     <div class="pipdown-app">
       <header class="pipdown-topbar">
         <div class="topbar-left">
-          <button id="backBtn" class="icon-btn" aria-label="Back">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M14.5 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
+          <button id="backBtn" class="icon-btn back-btn" aria-label="Back">
+            <img src="svg/left_fill.svg" alt="" class="back-icon" />
+            <span class="back-text">Back</span>
           </button>
         </div>
-        <div id="titleText" class="topbar-title">Pipdown</div>
         <div class="topbar-actions">
-          <button id="selectToggle" class="icon-btn select-btn" aria-label="Select files">
-            <span class="select-text">Select</span>
+          <button id="undoBtn" class="icon-btn select-action undo-right" aria-label="Undo">
+            <img src="svg/back_2_fill.svg" alt="" class="action-icon" />
           </button>
-          <button id="shareBtn" class="icon-btn select-action is-hidden" aria-label="Share selected">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M12 16V4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-              <path d="M8 8l4-4 4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M6 16v3a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-            </svg>
+          <button id="previewToggle" class="icon-btn select-action" aria-label="Preview">
+            <img src="svg/book_6_line.svg" alt="" class="action-icon" />
           </button>
-          <button id="deleteBtn" class="icon-btn select-action is-hidden" aria-label="Delete selected">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M4 7h16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-              <path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-              <path d="M8 7l1 12a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1l1-12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-            </svg>
+          <button id="newFileBtn" class="icon-btn select-action" aria-label="New file">
+            <img src="svg/file_line.svg" alt="" class="action-icon" />
           </button>
-          <button id="undoBtn" class="icon-btn select-action is-hidden" aria-label="Undo delete">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M7 7H3v4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M3 11a8 8 0 1 0 2.3-5.7L3 7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
+          <button id="newFolderBtn" class="icon-btn select-action" aria-label="New folder">
+            <img src="svg/folder_2_line.svg" alt="" class="action-icon" />
           </button>
+        </div>
+        <div class="topbar-menu">
           <button id="menuToggle" class="icon-btn" aria-label="Menu">
             <span class="menu-icon" aria-hidden="true">
               <span></span>
@@ -54,15 +43,32 @@
 
       <div id="menuPanel" class="menu-panel" aria-hidden="true">
         <div class="menu-card">
-          <button id="menuConnect" class="menu-item" type="button">Connect Dropbox</button>
-          <button id="menuDisconnect" class="menu-item" type="button">Disconnect</button>
-          <button id="menuRefresh" class="menu-item" type="button">Refresh</button>
-          <button id="menuNewFile" class="menu-item" type="button">New File</button>
-          <button id="menuNewFolder" class="menu-item" type="button">New Folder</button>
+          <button id="menuConnect" class="menu-item" type="button">
+            <img src="svg/dropbox_line.svg" alt="" class="menu-icon-img" />
+            <span>Connect</span>
+          </button>
+          <button id="menuDisconnect" class="menu-item" type="button">
+            <img src="svg/dropbox_line.svg" alt="" class="menu-icon-img" />
+            <span>Disconnect</span>
+          </button>
+          <button id="menuTrashAction" class="menu-item" type="button">
+            <img src="svg/delete_2_line.svg" alt="" class="menu-icon-img" />
+            <span>Delete File</span>
+          </button>
+          <button id="menuCopy" class="menu-item" type="button">
+            <img src="svg/clipboard_line.svg" alt="" class="menu-icon-img" />
+            <span>Copy to Clipboard</span>
+          </button>
+          <label class="menu-item menu-toggle">
+            <span>Show Status</span>
+            <input id="statusToggle" type="checkbox" />
+          </label>
+          <label class="menu-item menu-toggle">
+            <span>Show Deleted Items</span>
+            <input id="deletedToggle" type="checkbox" />
+          </label>
         </div>
       </div>
-
-      <div id="statusText" class="status-text">Connect Dropbox to get started.</div>
 
       <main class="pipdown-content">
         <section id="browserView" class="pipdown-view is-active">
@@ -71,13 +77,46 @@
         </section>
 
         <section id="editorView" class="pipdown-view">
+          <div id="formatBar" class="format-bar">
+            <button class="format-btn" data-action="h1" aria-label="Heading 1">
+              <img src="svg/heading_1_fill.svg" alt="" />
+            </button>
+            <button class="format-btn" data-action="h2" aria-label="Heading 2">
+              <img src="svg/heading_2_fill.svg" alt="" />
+            </button>
+            <button class="format-btn" data-action="h3" aria-label="Heading 3">
+              <img src="svg/heading_3_fill.svg" alt="" />
+            </button>
+            <button class="format-btn" data-action="bold" aria-label="Bold">
+              <img src="svg/bold_fill.svg" alt="" />
+            </button>
+            <button class="format-btn" data-action="italic" aria-label="Italic">
+              <img src="svg/italic_fill.svg" alt="" />
+            </button>
+            <button class="format-btn" data-action="checkbox" aria-label="Checkbox">
+              <img src="svg/checkbox_line.svg" alt="" />
+            </button>
+            <button class="format-btn" data-action="code" aria-label="Code">
+              <img src="svg/file_code_line.svg" alt="" />
+            </button>
+            <button class="format-btn" data-action="quote" aria-label="Quote">
+              <img src="svg/blockquote_line.svg" alt="" />
+            </button>
+          </div>
           <div id="editorWysiwyg" class="editor wysiwyg" contenteditable="true" spellcheck="true"></div>
           <textarea id="editorCode" class="editor code" spellcheck="false"></textarea>
+          <div id="editorPreview" class="editor preview"></div>
         </section>
       </main>
+      <footer class="status-footer">
+        <div class="footer-file" id="footerFile"></div>
+        <div id="statusText" class="status-text">Connect Dropbox to get started.</div>
+        <div id="wordCount" class="status-text">0 Words</div>
+      </footer>
     </div>
 
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

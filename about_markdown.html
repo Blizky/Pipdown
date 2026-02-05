@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>About Markdown</title>
+  <meta name="description" content="A minimal, easy-to-read introduction to Markdown with examples." />
+
+  <style>
+    :root{
+      --bg:#0b0c0f;
+      --text:#e9ecf1;
+      --muted:#b8bfcc;
+      --line:#2a2f3a;
+      --accent:#6ea8ff;
+
+      --max: 860px;
+      --radius: 14px;
+
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+
+      /* Comfortable touch + reading sizes (mobile-first) */
+      --padX: 16px;
+      --padY: 18px;
+      --gap: 14px;
+    }
+
+    @media (prefers-color-scheme: light) {
+      :root{
+        --bg:#ffffff;
+        --text:#121418;
+        --muted:#4a5568;
+        --line:#d6dae6;
+        --accent:#2b6cff;
+      }
+    }
+
+    *{ box-sizing: border-box; }
+    html{ scroll-behavior: smooth; }
+    body{
+      margin:0;
+      background:var(--bg);
+      color:var(--text);
+      font-family:var(--sans);
+      line-height:1.6;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+
+    /* ---------- Layout ---------- */
+    .wrap{
+      max-width: var(--max);
+      margin: 0 auto;
+      padding: 0 var(--padX);
+    }
+
+    header{
+      padding: 42px 0 18px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    main{
+      padding: 18px 0 56px;
+    }
+
+    /* ---------- Type ---------- */
+    h1{
+      font-size: clamp(1.55rem, 5vw, 2.2rem);
+      line-height: 1.15;
+      letter-spacing: -0.02em;
+      margin: 0;
+    }
+
+    h2{
+      font-size: 1.05rem;
+      letter-spacing: -0.01em;
+      margin: 0 0 10px;
+    }
+
+    p{ margin: 10px 0; }
+
+    .top{
+      display:flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .brand{
+      font-size: .95rem;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .lead{
+      margin: 14px 0 0;
+      color: var(--muted);
+      max-width: 70ch;
+      font-size: 1.02rem;
+    }
+
+    /* ---------- Flat card ---------- */
+    .card{
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: transparent;
+    }
+
+    .section{
+      padding: var(--padY) var(--padX);
+      border-top: 1px solid var(--line);
+    }
+    .section:first-child{ border-top: 0; }
+
+    /* ---------- Highlights (mobile friendly) ---------- */
+    .checks{
+      list-style: none;
+      padding: 0;
+      margin: 14px 0 0;
+      display: grid;
+      gap: 10px;
+      max-width: 70ch;
+    }
+
+    .checks li{
+      margin: 0;
+      display:flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;          /* tap-friendly */
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: transparent;
+    }
+
+    .checks img{
+      width: 18px;
+      height: 18px;
+      flex: 0 0 18px;
+      opacity: .95;
+    }
+
+    .checks strong{
+      font-weight: 750;
+      letter-spacing: -0.01em;
+      font-size: 1.02rem;
+    }
+
+    /* ---------- Lists ---------- */
+    ul{
+      margin: 10px 0 0 1.05rem;
+      color: var(--muted);
+      padding-left: .25rem;
+    }
+    li{ margin: 8px 0; }
+
+    /* ---------- Examples (stack on mobile, 2-col on wide) ---------- */
+    .grid{
+      display:grid;
+      grid-template-columns: 1fr;
+      gap: var(--gap);
+      margin-top: 12px;
+    }
+    @media (min-width: 820px){
+      .grid{ grid-template-columns: 1fr 1fr; }
+      :root{ --padX: 18px; --padY: 20px; --gap: 16px; }
+    }
+
+    .example{
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      overflow: hidden;
+      background: transparent;
+    }
+
+    .ex-head{
+      padding: 12px 12px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .ex-title{
+      font-weight: 650;
+      font-size: .98rem;
+      color: var(--text);
+      letter-spacing: -0.01em;
+    }
+
+    pre{
+      margin:0;
+      padding: 12px;
+      font-family: var(--mono);
+      font-size: .92rem;
+      line-height: 1.55;
+      overflow:auto;
+      white-space: pre;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* Make code blocks feel good on small screens */
+    @media (max-width: 420px){
+      pre{ font-size: .88rem; padding: 11px; }
+      .checks li{ padding: 10px 10px; }
+      .lead{ font-size: 1rem; }
+    }
+
+    code{
+      font-family: var(--mono);
+      font-size: .95em;
+    }
+
+    .note{
+      margin: 10px 12px 12px;
+      color: var(--muted);
+      font-size: .95rem;
+    }
+
+    /* Optional: small, simple “table of contents” for long pages */
+    .toc{
+      margin-top: 14px;
+      display:flex;
+      flex-wrap: wrap;
+      gap: 10px 14px;
+      color: var(--muted);
+      font-size: .95rem;
+    }
+    .toc a{
+      color: var(--muted);
+      text-decoration: none;
+      border-bottom: 1px solid transparent;
+      padding-bottom: 2px;
+    }
+    .toc a:hover{
+      color: var(--text);
+      border-bottom-color: var(--line);
+    }
+
+    a{ color: var(--accent); text-decoration: none; }
+    a:hover{ text-decoration: underline; }
+
+    footer{
+      padding: 18px var(--padX);
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: .92rem;
+      text-align: center;
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <div class="wrap">
+      <div class="top">
+        <h1>About Markdown</h1>
+        <div class="brand">Pipdown</div>
+      </div>
+
+      <p class="lead">
+        Markdown is a simple way to format text using plain characters.
+        You write normally, add a few lightweight symbols, and your notes can turn into clean documents anywhere.
+      </p>
+
+      <div class="toc" aria-label="On this page">
+        <a href="#why">Why it’s useful</a>
+        <a href="#basics">Basics</a>
+        <a href="#tips">Tips</a>
+        <a href="#compat">Compatibility</a>
+      </div>
+
+      <ul class="checks" aria-label="Highlights">
+        <li>
+          <img src="/svg/check_2_fill.svg" alt="" aria-hidden="true" />
+          <strong>Fast to type</strong>
+        </li>
+        <li>
+          <img src="/svg/check_2_fill.svg" alt="" aria-hidden="true" />
+          <strong>Readable as plain text</strong>
+        </li>
+        <li>
+          <img src="/svg/check_2_fill.svg" alt="" aria-hidden="true" />
+          <strong>Portable across apps</strong>
+        </li>
+        <li>
+          <img src="/svg/check_2_fill.svg" alt="" aria-hidden="true" />
+          <strong>Great for writing &amp; publishing</strong>
+        </li>
+      </ul>
+    </div>
+  </header>
+
+  <main>
+    <div class="wrap">
+      <div class="card">
+
+        <section class="section" id="why">
+          <h2>Why people use it</h2>
+          <ul>
+            <li><strong>No lock-in:</strong> a Markdown file is just text, so it’s easy to move, version, or back up.</li>
+            <li><strong>Focus:</strong> you write first, format later—without a complicated toolbar.</li>
+            <li><strong>Works everywhere:</strong> most editors, apps, and websites support it (or can convert it).</li>
+            <li><strong>Plays well with Git:</strong> small changes are easy to track.</li>
+          </ul>
+        </section>
+
+        <section class="section" id="basics">
+          <h2>The basics (examples)</h2>
+          <div class="grid">
+
+            <div class="example">
+              <div class="ex-head"><div class="ex-title">Headings</div></div>
+              <pre># Title
+## Section
+### Subsection</pre>
+              <div class="note">Use <code>#</code> for larger headings.</div>
+            </div>
+
+            <div class="example">
+              <div class="ex-head"><div class="ex-title">Bold, italic, and strikethrough</div></div>
+              <pre>This is **bold**
+This is *italic*
+This is ~~strikethrough~~</pre>
+              <div class="note">Asterisks are the most common.</div>
+            </div>
+
+            <div class="example">
+              <div class="ex-head"><div class="ex-title">Links</div></div>
+              <pre>[Pipdown](https://example.com)</pre>
+              <div class="note">Text in brackets, URL in parentheses.</div>
+            </div>
+
+            <div class="example">
+              <div class="ex-head"><div class="ex-title">Lists</div></div>
+              <pre>- Item one
+- Item two
+  - Sub-item
+
+1. First
+2. Second</pre>
+              <div class="note">Indent with two spaces for nested items.</div>
+            </div>
+
+            <div class="example">
+              <div class="ex-head"><div class="ex-title">Blockquotes</div></div>
+              <pre>&gt; This is a quote.
+&gt; It can span multiple lines.</pre>
+              <div class="note">Useful for callouts and citations.</div>
+            </div>
+
+            <div class="example">
+              <div class="ex-head"><div class="ex-title">Inline code and code blocks</div></div>
+              <pre>Use `inline code` in a sentence.
+
+```js
+function hello() {
+  console.log("Hi!");
+}
+```</pre>
+              <div class="note">Triple backticks create a code block (optionally with a language).</div>
+            </div>
+
+            <div class="example">
+              <div class="ex-head"><div class="ex-title">Images</div></div>
+              <pre>![Alt text](image-file-or-url.jpg)</pre>
+              <div class="note">Same as a link, but with <code>!</code> in front.</div>
+            </div>
+
+            <div class="example">
+              <div class="ex-head"><div class="ex-title">Checkboxes (task lists)</div></div>
+              <pre>- [ ] Write draft
+- [x] Edit
+- [ ] Publish</pre>
+              <div class="note">Support depends on the app (many do).</div>
+            </div>
+
+          </div>
+        </section>
+
+        <section class="section" id="tips">
+          <h2>Small tips that make Markdown nicer</h2>
+          <ul>
+            <li><strong>Keep it readable:</strong> if it looks good as plain text, it will usually render well too.</li>
+            <li><strong>Use headings:</strong> they make long notes scannable and easy to navigate.</li>
+            <li><strong>Prefer simple formatting:</strong> bold, lists, and links cover most real-world writing.</li>
+            <li><strong>Export when needed:</strong> Markdown can convert to PDF, HTML, Word, and more.</li>
+          </ul>
+        </section>
+
+        <section class="section" id="compat">
+          <h2>Compatibility note</h2>
+          <p class="note" style="margin-left:0; margin-right:0;">
+            Markdown has a few “flavors” (slightly different features). The basics above work almost everywhere.
+            If something doesn’t render in another app, it’s usually a feature like tables, checkboxes, or special extensions.
+          </p>
+        </section>
+
+        <footer>
+          Markdown is plain text that stays useful for decades. • Keep writing.
+        </footer>
+
+      </div>
+    </div>
+  </main>
+</body>
+</html>

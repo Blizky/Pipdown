@@ -8,19 +8,28 @@ const menuToggle = document.getElementById("menuToggle");
 const menuPanel = document.getElementById("menuPanel");
 const menuConnect = document.getElementById("menuConnect");
 const menuDisconnect = document.getElementById("menuDisconnect");
-const menuRefresh = document.getElementById("menuRefresh");
-const menuNewFile = document.getElementById("menuNewFile");
-const menuNewFolder = document.getElementById("menuNewFolder");
-const selectToggle = document.getElementById("selectToggle");
-const shareBtn = document.getElementById("shareBtn");
-const deleteBtn = document.getElementById("deleteBtn");
+const newFileBtn = document.getElementById("newFileBtn");
+const newFolderBtn = document.getElementById("newFolderBtn");
+const previewToggle = document.getElementById("previewToggle");
+const editUndoBtn = null;
+// redo removed
+const statusToggle = document.getElementById("statusToggle");
+const deletedToggle = document.getElementById("deletedToggle");
+const menuTrashAction = document.getElementById("menuTrashAction");
+const menuCopy = document.getElementById("menuCopy");
+const deleteUndoBtn = null;
 const undoBtn = document.getElementById("undoBtn");
 const browserView = document.getElementById("browserView");
 const editorView = document.getElementById("editorView");
 const connectBtn = document.getElementById("connectBtn");
+const editorPreview = document.getElementById("editorPreview");
+const wordCountEl = document.getElementById("wordCount");
+const formatBar = document.getElementById("formatBar");
+const formatButtons = Array.from(document.querySelectorAll(".format-btn"));
 
 const TOKEN_KEY = "pipdown-token";
 const CODE_VERIFIER_KEY = "pipdown-code-verifier";
+const SETTINGS_KEY = "pipdown-settings";
 const DROPBOX_APP_KEY = "zses7fnbivgrqgv";
 
 const memoryStore = new Map();
@@ -80,12 +89,15 @@ const state = {
   currentFile: null,
   currentFileName: "",
   view: "list",
+  mode: "edit",
   autosaveTimer: null,
   statusTimer: null,
-  selectionMode: false,
-  selectedFiles: new Map(),
-  lastDeleted: [],
-  showUndo: false,
+  showDeleted: false,
+  deletedSet: new Set(),
+  undoStack: [],
+  canUndo: false,
+  lastSavedContent: "",
+  undoTimer: null,
   rawMarkdown: "",
 };
 
@@ -104,77 +116,86 @@ function setStatus(message, timeout = 0) {
   }
 }
 
+function loadSettings() {
+  const saved = JSON.parse(safeGet(SETTINGS_KEY) || "{}");
+  const showStatus = saved.showStatus !== false;
+  statusToggle.checked = showStatus;
+  document.querySelector(".status-footer").classList.toggle("is-hidden", !showStatus);
+  state.showDeleted = Boolean(saved.showDeleted);
+  if (deletedToggle) {
+    deletedToggle.checked = state.showDeleted;
+  }
+}
+
+function saveSettings() {
+  const settings = {
+    showStatus: statusToggle.checked,
+    showDeleted: state.showDeleted,
+  };
+  safeSet(SETTINGS_KEY, JSON.stringify(settings));
+}
+
 function setTitle(text) {
-  titleText.textContent = text || "Pipdown";
+  if (titleText) {
+    titleText.textContent = "Pipdown";
+  }
 }
 
 function setView(view) {
   state.view = view;
   browserView.classList.toggle("is-active", view === "list");
   editorView.classList.toggle("is-active", view === "editor");
+  if (view === "list") {
+    editorCode.readOnly = false;
+    state.canUndo = false;
+    updateMenuUndoState();
+  }
   updateTopbar();
+  updateTrashMenuLabel();
+  updateWordCount();
+  updateFormatBarVisibility(false);
 }
 
 function updateTopbar() {
   if (state.view === "editor") {
     setTitle(state.currentFileName || "Untitled");
-    selectToggle.classList.add("is-hidden");
-    shareBtn.classList.add("is-hidden");
-    deleteBtn.classList.add("is-hidden");
-    undoBtn.classList.add("is-hidden");
   } else {
     const folderName = state.currentPath.split("/").filter(Boolean).pop();
     setTitle(folderName || "Pipdown");
-    if (state.currentPath) {
-      selectToggle.classList.remove("is-hidden");
-    } else {
-      selectToggle.classList.add("is-hidden");
-    }
-    updateSelectionUI();
   }
 
   const atRoot = !state.currentPath;
   backBtn.classList.toggle("is-disabled", state.view === "list" && atRoot);
+  updateToolbarState();
 }
 
-function updateSelectionUI() {
-  const hasSelection = state.selectedFiles.size > 0;
-  fileList.classList.toggle("selection-mode", state.selectionMode);
+function updateToolbarState() {
+  const connected = Boolean(ensureDropbox());
+  const inEditor = state.view === "editor";
+  previewToggle.classList.toggle("is-disabled", !inEditor);
+  newFileBtn.classList.toggle("is-disabled", !connected || inEditor);
+  newFolderBtn.classList.toggle("is-disabled", !connected || inEditor);
+}
 
-  if (!state.currentPath) {
-    shareBtn.classList.add("is-hidden");
-    deleteBtn.classList.add("is-hidden");
-    undoBtn.classList.add("is-hidden");
-    return;
-  }
+function updateMenuAuth() {
+  const connected = Boolean(ensureDropbox());
+  menuConnect.style.display = connected ? "none" : "flex";
+  menuDisconnect.style.display = connected ? "flex" : "none";
+}
 
-  if (state.showUndo) {
-    undoBtn.classList.remove("is-hidden");
-    selectToggle.classList.remove("is-hidden");
-    shareBtn.classList.add("is-hidden");
-    deleteBtn.classList.add("is-hidden");
-    selectToggle.querySelector(".select-text").textContent = "Select";
-    return;
-  }
-
-  undoBtn.classList.add("is-hidden");
-  if (state.selectionMode && hasSelection) {
-    shareBtn.classList.remove("is-hidden");
-    deleteBtn.classList.remove("is-hidden");
-    selectToggle.classList.add("is-hidden");
+function updateTrashMenuLabel() {
+  if (!menuTrashAction) return;
+  const label = menuTrashAction.querySelector("span");
+  if (!label) return;
+  if (state.view === "editor") {
+    label.textContent = "Delete File";
+    menuTrashAction.style.display = "flex";
   } else {
-    shareBtn.classList.add("is-hidden");
-    deleteBtn.classList.add("is-hidden");
-    selectToggle.classList.remove("is-hidden");
-    selectToggle.querySelector(".select-text").textContent = state.selectionMode ? "Done" : "Select";
+    menuTrashAction.style.display = "none";
   }
-}
-
-function clearSelection() {
-  state.selectionMode = false;
-  state.selectedFiles.clear();
-  document.querySelectorAll(".file-item.is-selected").forEach((item) => item.classList.remove("is-selected"));
-  updateSelectionUI();
+  if (menuCopy) {
+    menuCopy.style.display = state.view === "editor" ? "flex" : "none";
+  }
 }
 
 function toggleMenu(open) {
@@ -214,11 +235,16 @@ async function listFolder(path = "") {
     setStatus("Loading...");
     const response = await dbx.filesListFolder({ path });
     state.currentPath = path;
+    await loadDeletedSet(path);
     state.currentFile = null;
     state.currentFileName = "";
-    const entries = (response.result.entries || []).filter((entry) => !entry.name.startsWith("."));
-    renderFileList(entries);
-    clearSelection();
+    const entries = (response.result.entries || []).filter((entry) => {
+      if (entry.name.startsWith(".")) return false;
+      if (entry[".tag"] === "folder") return true;
+      return entry.name.toLowerCase().endsWith(".md");
+    });
+    const visible = state.showDeleted ? entries : entries.filter((entry) => !state.deletedSet.has(entry.name));
+    renderFileList(visible);
     setView("list");
     setStatus("");
   } catch (error) {
@@ -236,12 +262,19 @@ async function listFolder(path = "") {
 
 function renderFileList(entries) {
   fileList.innerHTML = "";
-  const sorted = entries.sort((a, b) => a.name.localeCompare(b.name));
+  const sorted = entries.sort((a, b) => {
+    const aIsFolder = a[".tag"] === "folder";
+    const bIsFolder = b[".tag"] === "folder";
+    if (aIsFolder !== bIsFolder) {
+      return aIsFolder ? -1 : 1;
+    }
+    return a.name.localeCompare(b.name);
+  });
 
   if (!sorted.length) {
     const empty = document.createElement("div");
-    empty.className = "file-item";
-    empty.innerHTML = "<div class=\"icon\"></div><div class=\"label\">Empty folder</div>";
+    empty.className = "empty-message";
+    empty.innerHTML = "<img src=\"svg/warning_fill.svg\" alt=\"\" class=\"image-missing-icon\" /><span>This folder doesn't contain any markdown file</span>";
     fileList.appendChild(empty);
     return;
   }
@@ -251,16 +284,21 @@ function renderFileList(entries) {
     item.className = "file-item";
     item.dataset.type = entry[".tag"];
 
-    const check = document.createElement("div");
-    check.className = "check";
-    check.innerHTML = "<svg viewBox=\"0 0 24 24\"><path d=\"M5 13l4 4L19 7\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>";
-
     const icon = document.createElement("div");
     icon.className = "icon";
+    const iconImg = document.createElement("img");
+    iconImg.className = "icon-img";
+    iconImg.alt = "";
+    iconImg.src = entry[".tag"] === "folder" ? "svg/folder_2_line.svg" : "svg/file_line.svg";
+    icon.appendChild(iconImg);
 
     const label = document.createElement("div");
     label.className = "label";
-    label.textContent = entry.name;
+    if (entry[".tag"] === "file" && entry.name.toLowerCase().endsWith(".md")) {
+      label.textContent = entry.name.replace(/\.md$/i, "");
+    } else {
+      label.textContent = entry.name;
+    }
 
     const meta = document.createElement("div");
     meta.className = "meta";
@@ -272,7 +310,9 @@ function renderFileList(entries) {
       meta.textContent = "File";
     }
 
-    item.appendChild(check);
+    if (state.deletedSet.has(entry.name)) {
+      item.classList.add("is-deleted");
+    }
     item.appendChild(icon);
     item.appendChild(label);
     item.appendChild(meta);
@@ -283,150 +323,98 @@ function renderFileList(entries) {
 }
 
 async function handleEntry(entry, item) {
-  if (state.selectionMode && entry[".tag"] === "file") {
-    const key = entry.path_lower;
-    if (state.selectedFiles.has(key)) {
-      state.selectedFiles.delete(key);
-      item.classList.remove("is-selected");
-    } else {
-      state.selectedFiles.set(key, entry);
-      item.classList.add("is-selected");
-    }
-    updateSelectionUI();
-    return;
-  }
-
+  item.classList.add("is-opening");
   if (entry[".tag"] === "folder") {
     await listFolder(entry.path_lower);
+    item.classList.remove("is-opening");
     return;
   }
   if (!entry.name.toLowerCase().endsWith(".md")) {
     setStatus("Only .md files are supported.", 1500);
+    item.classList.remove("is-opening");
     return;
   }
 
   const dbx = ensureDropbox();
   try {
     setStatus("Opening...");
+    if (state.showDeleted && state.deletedSet.has(entry.name)) {
+      state.deletedSet.delete(entry.name);
+      await saveDeletedSet(state.currentPath);
+    }
     const response = await dbx.filesDownload({ path: entry.path_lower });
     const blob = response.result.fileBlob;
     const text = await blob.text();
     state.currentFile = entry.path_lower;
     state.currentFileName = entry.name;
     setCurrentMarkdown(text);
+    editorCode.readOnly = false;
+    setMode("edit");
     setView("editor");
     setStatus("");
+    updateFooterFile();
+    item.classList.remove("is-opening");
   } catch (error) {
     console.error(error);
     setStatus("Failed to open file.");
+    item.classList.remove("is-opening");
   }
 }
 
-async function ensureDeletedFolder() {
+const DELETED_NOTE = ".pipdown_deleted.json";
+
+function deletedNotePath(path) {
+  return `${path || ""}/${DELETED_NOTE}`.replace("//", "/");
+}
+
+async function loadDeletedSet(path) {
   const dbx = ensureDropbox();
-  if (!dbx) return null;
-  const base = state.currentPath || "";
-  const deletedPath = `${base}/.deleted`.replace("//", "/");
+  if (!dbx) {
+    state.deletedSet = new Set();
+    return;
+  }
   try {
-    await dbx.filesCreateFolderV2({ path: deletedPath });
+    const response = await dbx.filesDownload({ path: deletedNotePath(path) });
+    const blob = response.result.fileBlob;
+    const text = await blob.text();
+    const list = JSON.parse(text || "[]");
+    state.deletedSet = new Set(Array.isArray(list) ? list : []);
   } catch (error) {
     const tag = error?.error?.error?.[".tag"];
-    if (tag !== "path" && tag !== "path/conflict") {
+    if (tag === "path" || tag === "path/not_found") {
+      state.deletedSet = new Set();
+    } else {
       console.error(error);
+      state.deletedSet = new Set();
     }
   }
-  return deletedPath;
 }
 
-async function deleteSelected() {
+async function saveDeletedSet(path) {
   const dbx = ensureDropbox();
-  if (!dbx || state.selectedFiles.size === 0) {
+  if (!dbx) return;
+  const list = Array.from(state.deletedSet);
+  try {
+    await dbx.filesUpload({
+      path: deletedNotePath(path),
+      contents: JSON.stringify(list),
+      mode: { ".tag": "overwrite" },
+    });
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+async function deleteCurrentFile() {
+  const dbx = ensureDropbox();
+  if (!dbx || !state.currentFileName) {
     return;
   }
-  const deletedPath = await ensureDeletedFolder();
-  if (!deletedPath) return;
-
-  const moves = [];
-  for (const entry of state.selectedFiles.values()) {
-    const toPath = `${deletedPath}/${entry.name}`.replace("//", "/");
-    moves.push({ from_path: entry.path_lower, to_path: toPath });
-  }
-
-  const results = [];
-  for (const move of moves) {
-    try {
-      const res = await dbx.filesMoveV2({ from_path: move.from_path, to_path: move.to_path, autorename: true });
-      results.push({
-        from: move.from_path,
-        to: res.result.metadata.path_lower,
-      });
-    } catch (error) {
-      console.error(error);
-    }
-  }
-
-  state.lastDeleted = results;
-  state.showUndo = results.length > 0;
-  clearSelection();
+  state.deletedSet.add(state.currentFileName);
+  await saveDeletedSet(state.currentPath);
+  setStatus("Deleted.", 1200);
+  setView("list");
   listFolder(state.currentPath || "");
-  setStatus(results.length ? "Moved to .deleted" : "Delete failed.", 1200);
-}
-
-async function undoDelete() {
-  const dbx = ensureDropbox();
-  if (!dbx || !state.lastDeleted.length) {
-    return;
-  }
-  for (const item of state.lastDeleted) {
-    try {
-      await dbx.filesMoveV2({ from_path: item.to, to_path: item.from, autorename: true });
-    } catch (error) {
-      console.error(error);
-    }
-  }
-  state.lastDeleted = [];
-  state.showUndo = false;
-  listFolder(state.currentPath || "");
-  setStatus("Restored.", 1200);
-}
-
-async function shareSelected() {
-  const dbx = ensureDropbox();
-  if (!dbx || state.selectedFiles.size === 0) {
-    return;
-  }
-
-  const links = [];
-  for (const entry of state.selectedFiles.values()) {
-    try {
-      const res = await dbx.filesGetTemporaryLink({ path: entry.path_lower });
-      links.push({ name: entry.name, url: res.result.link });
-    } catch (error) {
-      console.error(error);
-    }
-  }
-
-  if (!links.length) {
-    setStatus("Share failed.", 1200);
-    return;
-  }
-
-  const text = links.map((item) => `${item.name}: ${item.url}`).join("\n");
-  if (navigator.share) {
-    try {
-      await navigator.share({
-        title: "Pipdown files",
-        text,
-      });
-    } catch (error) {
-      console.error(error);
-    }
-  } else if (navigator.clipboard) {
-    await navigator.clipboard.writeText(text);
-    setStatus("Shared.", 1200);
-  } else {
-    alert(text);
-  }
 }
 
 async function createFolder() {
@@ -459,15 +447,23 @@ async function createFile() {
   const fileName = trimmed.toLowerCase().endsWith(".md") ? trimmed : `${trimmed}.md`;
   const path = `${state.currentPath}/${fileName}`.replace("//", "/");
   try {
+    const title = trimmed.replace(/\.md$/i, "");
+    const initial = `# ${title}\n\n`;
     await dbx.filesUpload({
       path,
-      contents: "",
+      contents: initial,
       mode: { ".tag": "add" },
     });
     state.currentFile = path;
     state.currentFileName = fileName;
-    setCurrentMarkdown("");
+    setCurrentMarkdown(initial);
+    setMode("edit");
     setView("editor");
+    updateFooterFile();
+    setTimeout(() => {
+      editorCode.focus();
+      editorCode.selectionStart = editorCode.selectionEnd = editorCode.value.length;
+    }, 0);
   } catch (error) {
     console.error(error);
     setStatus("Could not create file.");
@@ -479,80 +475,11 @@ function escapeHtml(text) {
 }
 
 function renderInline(text) {
-  let result = escapeHtml(text);
-  result = result.replace(/`([^`]+)`/g, (_match, code) => {
-    return `<code><span class="md-token">&#96;</span>${escapeHtml(code)}<span class="md-token">&#96;</span></code>`;
-  });
-  result = result.replace(/\\*\\*([^*]+)\\*\\*/g, (_match, content) => {
-    return `<strong><span class="md-token">**</span>${content}<span class="md-token">**</span></strong>`;
-  });
-  result = result.replace(/__([^_]+)__/g, (_match, content) => {
-    return `<strong><span class="md-token">__</span>${content}<span class="md-token">__</span></strong>`;
-  });
-  result = result.replace(/\\*([^*]+)\\*/g, (_match, content) => {
-    return `<em><span class="md-token">*</span>${content}<span class="md-token">*</span></em>`;
-  });
-  result = result.replace(/_([^_]+)_/g, (_match, content) => {
-    return `<em><span class="md-token">_</span>${content}<span class="md-token">_</span></em>`;
-  });
-  result = result.replace(/\\[([^\\]]+)\\]\\(([^\\)]+)\\)/g, (_match, label, url) => {
-    return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener"><span class="md-token">[</span>${label}<span class="md-token">]</span><span class="md-token">(</span>${escapeHtml(url)}<span class="md-token">)</span></a>`;
-  });
-  return result;
+  return escapeHtml(text);
 }
 
 function renderMarkdown(md) {
-  const lines = (md || "").split("\\n");
-  let html = "";
-  let inList = false;
-
-  const closeList = () => {
-    if (inList) {
-      html += "</ul>";
-      inList = false;
-    }
-  };
-
-  lines.forEach((line) => {
-    if (!line.trim()) {
-      closeList();
-      html += "<p><br></p>";
-      return;
-    }
-
-    const headingMatch = line.match(/^(#{1,6})\\s+(.*)$/);
-    if (headingMatch) {
-      closeList();
-      const level = headingMatch[1].length;
-      const token = headingMatch[1];
-      const text = renderInline(headingMatch[2]);
-      html += `<h${level}><span class="md-token">${token}</span> ${text}</h${level}>`;
-      return;
-    }
-
-    const quoteMatch = line.match(/^>\\s?(.*)$/);
-    if (quoteMatch) {
-      closeList();
-      html += `<blockquote><span class="md-token">&gt;</span> ${renderInline(quoteMatch[1])}</blockquote>`;
-      return;
-    }
-
-    const listMatch = line.match(/^[-*+]\\s+(.*)$/);
-    if (listMatch) {
-      if (!inList) {
-        html += "<ul>";
-        inList = true;
-      }
-      html += `<li><span class="md-token">-</span>${renderInline(listMatch[1])}</li>`;
-      return;
-    }
-
-    closeList();
-    html += `<p>${renderInline(line)}</p>`;
-  });
-
-  closeList();
-  return html;
+  return renderInline(md || "");
 }
 
 function getCurrentMarkdown() {
@@ -563,9 +490,121 @@ function setCurrentMarkdown(md) {
   const text = md || "";
   state.rawMarkdown = text;
   editorCode.value = text;
-  editorWysiwyg.innerHTML = renderMarkdown(text);
+  editorWysiwyg.textContent = text;
+  state.lastSavedContent = text;
+  state.undoStack = [text];
+  state.canUndo = false;
+  updateMenuUndoState();
+  updateFooterFile();
+  updateWordCount();
 }
 
+function updateMenuUndoState() {
+  if (!undoBtn) return;
+  const enabled = state.view === "editor" && state.undoStack.length > 1;
+  undoBtn.classList.toggle("is-disabled", !enabled);
+}
+
+function updateFooterFile() {
+  const el = document.getElementById("footerFile");
+  if (!el) return;
+  if (!state.currentFileName) {
+    el.textContent = "";
+    return;
+  }
+  const rawPath = `${state.currentPath || ""}/${state.currentFileName}`.replace("//", "/");
+  let path = rawPath.endsWith("/") ? rawPath.slice(0, -1) : rawPath;
+  if (path.startsWith("/")) {
+    path = path.slice(1);
+  }
+  el.textContent = path;
+  el.title = path;
+}
+
+function updateWordCount() {
+  if (!wordCountEl) return;
+  const text = (state.rawMarkdown || "").trim();
+  if (!text) {
+    wordCountEl.textContent = "0 Words";
+    return;
+  }
+  const words = text.split(/\s+/).filter(Boolean).length;
+  wordCountEl.textContent = `${words} Words`;
+}
+
+function renderPreview() {
+  if (!window.marked) {
+    editorPreview.textContent = state.rawMarkdown || "";
+    return;
+  }
+  editorPreview.innerHTML = window.marked.parse(state.rawMarkdown || "");
+  enhancePreviewImages();
+}
+
+async function enhancePreviewImages() {
+  const imgs = Array.from(editorPreview.querySelectorAll("img"));
+  if (!imgs.length) {
+    return;
+  }
+  const dbx = ensureDropbox();
+  for (const img of imgs) {
+    const raw = img.getAttribute("src") || "";
+    const resolved = await resolveImagePath(dbx, raw);
+    if (resolved) {
+      img.src = resolved;
+      img.style.width = "80%";
+      img.style.display = "block";
+      img.style.margin = "12px auto";
+    } else {
+      const placeholder = document.createElement("div");
+      placeholder.className = "image-missing";
+      placeholder.innerHTML = `<img src="svg/heart_crack_fill.svg" alt="" class="image-missing-icon" /><span>Image ${raw} not found</span>`;
+      img.replaceWith(placeholder);
+    }
+  }
+}
+
+async function resolveImagePath(dbx, raw) {
+  if (!raw) return "";
+  const candidates = [];
+  if (raw.startsWith("/")) {
+    candidates.push(raw);
+  } else {
+    const base = state.currentPath || "";
+    candidates.push(`${base}/${raw}`.replace("//", "/"));
+    candidates.push(`/${raw}`.replace("//", "/"));
+  }
+  if (!dbx) {
+    return "";
+  }
+  for (const path of candidates) {
+    try {
+      const res = await dbx.filesGetTemporaryLink({ path });
+      return res.result.link;
+    } catch (error) {
+      // try next
+    }
+  }
+  return "";
+}
+
+function setMode(mode) {
+  state.mode = mode;
+  if (mode === "preview") {
+    renderPreview();
+    editorCode.style.display = "none";
+    editorPreview.style.display = "block";
+    previewToggle.querySelector("img").src = "svg/edit_2_fill.svg";
+    previewToggle.setAttribute("aria-label", "Edit");
+    updateFormatBarVisibility(false);
+  } else {
+    editorPreview.style.display = "none";
+    editorCode.style.display = "block";
+    previewToggle.querySelector("img").src = "svg/book_6_line.svg";
+    previewToggle.setAttribute("aria-label", "Preview");
+    updateFormatBarVisibility(true);
+  }
+}
 async function saveFile({ silent } = {}) {
   const dbx = ensureDropbox();
   if (!dbx || !state.currentFile) {
@@ -582,6 +621,11 @@ async function saveFile({ silent } = {}) {
       contents: content,
       mode: { ".tag": "overwrite" },
     });
+    if (content !== state.lastSavedContent) {
+      state.lastSavedContent = content;
+      state.canUndo = true;
+      updateMenuUndoState();
+    }
     if (silent) {
       setStatus("Saved", 900);
     } else {
@@ -605,6 +649,86 @@ function scheduleAutosave() {
   }, 900);
 }
 
+function updateFormatBarVisibility(isEditing) {
+  if (!formatBar) return;
+  const shouldShow = state.view === "editor" && state.mode === "edit" && isEditing;
+  const isMobile = window.matchMedia("(max-width: 900px)").matches;
+  formatBar.classList.toggle("is-visible", shouldShow);
+  formatBar.classList.toggle("is-mobile", shouldShow && isMobile);
+  formatBar.classList.toggle("is-desktop", shouldShow && !isMobile);
+  document.querySelector(".status-footer").classList.toggle("is-hidden", shouldShow && isMobile);
+}
+
+function applyInlineWrap(prefix, suffix = prefix) {
+  const start = editorCode.selectionStart;
+  const end = editorCode.selectionEnd;
+  const value = editorCode.value;
+  if (start === end) {
+    const insert = `${prefix}${suffix}`;
+    editorCode.value = value.slice(0, start) + insert + value.slice(end);
+    editorCode.selectionStart = editorCode.selectionEnd = start + prefix.length;
+  } else {
+    const selected = value.slice(start, end);
+    editorCode.value = value.slice(0, start) + prefix + selected + suffix + value.slice(end);
+    editorCode.selectionStart = start + prefix.length;
+    editorCode.selectionEnd = end + prefix.length;
+  }
+  state.rawMarkdown = editorCode.value;
+  updateWordCount();
+  scheduleAutosave();
+}
+
+function insertLinePrefix(prefix) {
+  const value = editorCode.value;
+  const start = editorCode.selectionStart;
+  const lineStart = value.lastIndexOf("\n", start - 1) + 1;
+  editorCode.value = value.slice(0, lineStart) + prefix + value.slice(lineStart);
+  editorCode.selectionStart = editorCode.selectionEnd = start + prefix.length;
+  state.rawMarkdown = editorCode.value;
+  updateWordCount();
+  scheduleAutosave();
+}
+
+function insertCheckbox() {
+  insertLinePrefix("- [ ] ");
+}
+
+function insertHeading(level) {
+  const value = editorCode.value;
+  const start = editorCode.selectionStart;
+  const lineStart = value.lastIndexOf("\n", start - 1) + 1;
+  const lineEnd = value.indexOf("\n", start);
+  const end = lineEnd === -1 ? value.length : lineEnd;
+  const line = value.slice(lineStart, end).replace(/^#{1,6}\s+/, "");
+  const prefix = "#".repeat(level) + " ";
+  editorCode.value = value.slice(0, lineStart) + prefix + line + value.slice(end);
+  editorCode.selectionStart = editorCode.selectionEnd = lineStart + prefix.length + line.length;
+  state.rawMarkdown = editorCode.value;
+  updateWordCount();
+  scheduleAutosave();
+}
+
+function pushUndoState(value) {
+  const last = state.undoStack[state.undoStack.length - 1];
+  if (value === last) {
+    return;
+  }
+  state.undoStack.push(value);
+  if (state.undoStack.length > 3) {
+    state.undoStack.shift();
+  }
+  updateMenuUndoState();
+}
+
+function scheduleUndoSnapshot() {
+  if (state.undoTimer) {
+    clearTimeout(state.undoTimer);
+  }
+  state.undoTimer = setTimeout(() => {
+    pushUndoState(editorCode.value);
+  }, 400);
+}
+
 function goBack() {
   if (state.view === "editor") {
     listFolder(state.currentPath || "");
@@ -619,47 +743,17 @@ function goBack() {
   listFolder(parent === "/" ? "" : parent);
 }
 
-function getCaretOffset() {
-  const selection = window.getSelection();
-  if (!selection || selection.rangeCount === 0) {
-    return 0;
-  }
-  const range = selection.getRangeAt(0);
-  const preRange = range.cloneRange();
-  preRange.selectNodeContents(editorWysiwyg);
-  preRange.setEnd(range.endContainer, range.endOffset);
-  return preRange.toString().length;
-}
-
-function setCaretOffset(offset) {
-  const selection = window.getSelection();
-  if (!selection) return;
-  const range = document.createRange();
-  let current = 0;
-  const walker = document.createTreeWalker(editorWysiwyg, NodeFilter.SHOW_TEXT, null);
-  let node = walker.nextNode();
-  while (node) {
-    const length = node.textContent.length;
-    if (current + length >= offset) {
-      range.setStart(node, Math.max(0, offset - current));
-      range.collapse(true);
-      selection.removeAllRanges();
-      selection.addRange(range);
-      return;
-    }
-    current += length;
-    node = walker.nextNode();
-  }
-  range.selectNodeContents(editorWysiwyg);
-  range.collapse(false);
-  selection.removeAllRanges();
-  selection.addRange(range);
-}
-
 function handlePaste(event) {
   event.preventDefault();
   const text = event.clipboardData.getData("text/plain");
-  document.execCommand("insertText", false, text);
+  const start = editorCode.selectionStart;
+  const end = editorCode.selectionEnd;
+  const current = editorCode.value;
+  editorCode.value = current.slice(0, start) + text + current.slice(end);
+  editorCode.selectionStart = editorCode.selectionEnd = start + text.length;
+  state.rawMarkdown = editorCode.value;
+  scheduleAutosave();
+  updateWordCount();
 }
 
 async function handleAuthRedirect() {
@@ -684,6 +778,7 @@ async function handleAuthRedirect() {
     state.dbx = new Dropbox.Dropbox({ accessToken });
     setStatus("Connected.", 1200);
     listFolder("");
+    updateMenuAuth();
   } catch (error) {
     console.error(error);
     setStatus("Dropbox authentication failed.");
@@ -712,29 +807,19 @@ function disconnectDropbox() {
   setCurrentMarkdown("");
   setView("list");
   listFolder("");
+  updateFooterFile();
+  updateMenuAuth();
 }
 
 function setupListeners() {
   backBtn.addEventListener("click", goBack);
-  selectToggle.addEventListener("click", () => {
-    state.showUndo = false;
-    state.selectionMode = !state.selectionMode;
-    if (!state.selectionMode) {
-      state.selectedFiles.clear();
-      document.querySelectorAll(".file-item.is-selected").forEach((item) => item.classList.remove("is-selected"));
-    }
-    updateSelectionUI();
-  });
-  shareBtn.addEventListener("click", () => {
-    shareSelected();
-  });
-  deleteBtn.addEventListener("click", () => {
-    deleteSelected();
-  });
-  undoBtn.addEventListener("click", () => {
-    undoDelete();
-  });
   connectBtn.addEventListener("click", connectDropbox);
+  newFileBtn.addEventListener("click", () => {
+    createFile();
+  });
+  newFolderBtn.addEventListener("click", () => {
+    createFolder();
+  });
   menuToggle.addEventListener("click", (event) => {
     event.stopPropagation();
     toggleMenu();
@@ -747,33 +832,104 @@ function setupListeners() {
     toggleMenu(false);
     disconnectDropbox();
   });
-  menuRefresh.addEventListener("click", () => {
+  menuTrashAction.addEventListener("click", () => {
     toggleMenu(false);
-    listFolder(state.currentPath || "");
+    if (state.view === "editor") {
+      deleteCurrentFile();
+    }
   });
-  menuNewFile.addEventListener("click", () => {
-    toggleMenu(false);
-    createFile();
+  if (menuCopy) {
+    menuCopy.addEventListener("click", async () => {
+      toggleMenu(false);
+      if (!state.currentFile) {
+        return;
+      }
+      const text = getCurrentMarkdown();
+      try {
+        await navigator.clipboard.writeText(text);
+        setStatus("Copied.", 1200);
+      } catch (error) {
+        console.error(error);
+        setStatus("Copy failed.", 1200);
+      }
+    });
+  }
+  statusToggle.addEventListener("change", () => {
+    saveSettings();
+    document.querySelector(".status-footer").classList.toggle("is-hidden", !statusToggle.checked);
   });
-  menuNewFolder.addEventListener("click", () => {
-    toggleMenu(false);
-    createFolder();
-  });
+  if (deletedToggle) {
+    deletedToggle.addEventListener("change", () => {
+      state.showDeleted = deletedToggle.checked;
+      saveSettings();
+      listFolder(state.currentPath || "");
+    });
+  }
+  if (undoBtn) {
+    undoBtn.addEventListener("click", () => {
+      if (state.undoStack.length <= 1) {
+        return;
+      }
+      state.undoStack.pop();
+      const next = state.undoStack[state.undoStack.length - 1] || "";
+      state.rawMarkdown = next;
+      editorCode.value = next;
+      updateWordCount();
+      updateMenuUndoState();
+      editorCode.focus();
+    });
+  }
   document.addEventListener("click", (event) => {
     if (!menuPanel.contains(event.target) && !menuToggle.contains(event.target)) {
       toggleMenu(false);
     }
   });
 
-  editorWysiwyg.addEventListener("paste", handlePaste);
-  editorWysiwyg.addEventListener("input", () => {
-    const caret = getCaretOffset();
-    const text = editorWysiwyg.innerText.replace(/\u00a0/g, " ");
-    state.rawMarkdown = text;
-    editorCode.value = text;
-    editorWysiwyg.innerHTML = renderMarkdown(text);
-    setCaretOffset(caret);
+  editorCode.addEventListener("paste", handlePaste);
+  editorCode.addEventListener("input", () => {
+    state.rawMarkdown = editorCode.value;
     scheduleAutosave();
+    updateWordCount();
+    scheduleUndoSnapshot();
+  });
+  editorCode.addEventListener("focus", () => updateFormatBarVisibility(true));
+  editorCode.addEventListener("blur", () => updateFormatBarVisibility(false));
+  window.addEventListener("resize", () => updateFormatBarVisibility(document.activeElement === editorCode));
+  formatButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const action = btn.getAttribute("data-action");
+      switch (action) {
+        case "bold":
+          applyInlineWrap("**");
+          break;
+        case "italic":
+          applyInlineWrap("_");
+          break;
+        case "code":
+          applyInlineWrap("`");
+          break;
+        case "quote":
+          insertLinePrefix("> ");
+          break;
+        case "checkbox":
+          insertCheckbox();
+          break;
+        case "h1":
+          insertHeading(1);
+          break;
+        case "h2":
+          insertHeading(2);
+          break;
+        case "h3":
+          insertHeading(3);
+          break;
+        default:
+          break;
+      }
+    });
+  });
+  previewToggle.addEventListener("click", () => {
+    setMode(state.mode === "edit" ? "preview" : "edit");
   });
 }
 
@@ -781,14 +937,18 @@ function init() {
   setView("list");
   setStatus("");
   setupListeners();
+  loadSettings();
+  updateMenuUndoState();
   handleAuthRedirect();
 
   const dbx = ensureDropbox();
   if (dbx) {
     setStatus("Connected.", 800);
     listFolder("");
+    updateMenuAuth();
   } else {
     listFolder("");
+    updateMenuAuth();
   }
 }
 
