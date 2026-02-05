@@ -266,64 +266,6 @@ body {
   flex-direction: column;
 }
 
-.format-bar {
-  display: none;
-  gap: 10px;
-  align-items: center;
-  padding: 8px 10px;
-  border: 1px solid var(--hairline);
-  border-radius: 12px;
-  background: var(--bg);
-  margin: 8px 0 10px;
-}
-
-.format-bar.is-visible {
-  display: inline-flex;
-}
-
-.format-btn {
-  border: none;
-  background: transparent;
-  width: 28px;
-  height: 28px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  cursor: pointer;
-}
-
-.format-btn img {
-  width: 18px;
-  height: 18px;
-  filter: invert(35%) sepia(20%) saturate(640%) hue-rotate(176deg) brightness(90%) contrast(88%);
-}
-
-.format-bar.is-mobile {
-  position: fixed;
-  left: 10px;
-  right: 10px;
-  bottom: calc(10px + env(safe-area-inset-bottom));
-  z-index: 40;
-  border-radius: 16px;
-  padding: 10px 12px;
-  justify-content: space-between;
-}
-
-.format-bar.is-mobile .format-btn {
-  width: 32px;
-  height: 32px;
-}
-
-.format-bar.is-mobile .format-btn img {
-  width: 20px;
-  height: 20px;
-}
-
-.format-bar.is-desktop {
-  position: sticky;
-  top: 0;
-}
 
 .status-footer {
   border-top: 1px solid var(--hairline);

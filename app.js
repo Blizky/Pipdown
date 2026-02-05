@@ -24,8 +24,6 @@ const editorView = document.getElementById("editorView");
 const connectBtn = document.getElementById("connectBtn");
 const editorPreview = document.getElementById("editorPreview");
 const wordCountEl = document.getElementById("wordCount");
-const formatBar = document.getElementById("formatBar");
-const formatButtons = Array.from(document.querySelectorAll(".format-btn"));
 
 const TOKEN_KEY = "pipdown-token";
 const CODE_VERIFIER_KEY = "pipdown-code-verifier";
@@ -153,7 +151,6 @@ function setView(view) {
   updateTopbar();
   updateTrashMenuLabel();
   updateWordCount();
-  updateFormatBarVisibility(false);
 }
 
 function updateTopbar() {
@@ -649,65 +646,6 @@ function scheduleAutosave() {
   }, 900);
 }
 
-function updateFormatBarVisibility(isEditing) {
-  if (!formatBar) return;
-  const shouldShow = state.view === "editor" && state.mode === "edit" && isEditing;
-  const isMobile = window.matchMedia("(max-width: 900px)").matches;
-  formatBar.classList.toggle("is-visible", shouldShow);
-  formatBar.classList.toggle("is-mobile", shouldShow && isMobile);
-  formatBar.classList.toggle("is-desktop", shouldShow && !isMobile);
-  document.querySelector(".status-footer").classList.toggle("is-hidden", shouldShow && isMobile);
-}
-
-function applyInlineWrap(prefix, suffix = prefix) {
-  const start = editorCode.selectionStart;
-  const end = editorCode.selectionEnd;
-  const value = editorCode.value;
-  if (start === end) {
-    const insert = `${prefix}${suffix}`;
-    editorCode.value = value.slice(0, start) + insert + value.slice(end);
-    editorCode.selectionStart = editorCode.selectionEnd = start + prefix.length;
-  } else {
-    const selected = value.slice(start, end);
-    editorCode.value = value.slice(0, start) + prefix + selected + suffix + value.slice(end);
-    editorCode.selectionStart = start + prefix.length;
-    editorCode.selectionEnd = end + prefix.length;
-  }
-  state.rawMarkdown = editorCode.value;
-  updateWordCount();
-  scheduleAutosave();
-}
-
-function insertLinePrefix(prefix) {
-  const value = editorCode.value;
-  const start = editorCode.selectionStart;
-  const lineStart = value.lastIndexOf("\n", start - 1) + 1;
-  editorCode.value = value.slice(0, lineStart) + prefix + value.slice(lineStart);
-  editorCode.selectionStart = editorCode.selectionEnd = start + prefix.length;
-  state.rawMarkdown = editorCode.value;
-  updateWordCount();
-  scheduleAutosave();
-}
-
-function insertCheckbox() {
-  insertLinePrefix("- [ ] ");
-}
-
-function insertHeading(level) {
-  const value = editorCode.value;
-  const start = editorCode.selectionStart;
-  const lineStart = value.lastIndexOf("\n", start - 1) + 1;
-  const lineEnd = value.indexOf("\n", start);
-  const end = lineEnd === -1 ? value.length : lineEnd;
-  const line = value.slice(lineStart, end).replace(/^#{1,6}\s+/, "");
-  const prefix = "#".repeat(level) + " ";
-  editorCode.value = value.slice(0, lineStart) + prefix + line + value.slice(end);
-  editorCode.selectionStart = editorCode.selectionEnd = lineStart + prefix.length + line.length;
-  state.rawMarkdown = editorCode.value;
-  updateWordCount();
-  scheduleAutosave();
-}
-
 function pushUndoState(value) {
   const last = state.undoStack[state.undoStack.length - 1];
   if (value === last) {
@@ -891,42 +829,6 @@ function setupListeners() {
     scheduleAutosave();
     updateWordCount();
     scheduleUndoSnapshot();
-  });
-  editorCode.addEventListener("focus", () => updateFormatBarVisibility(true));
-  editorCode.addEventListener("blur", () => updateFormatBarVisibility(false));
-  window.addEventListener("resize", () => updateFormatBarVisibility(document.activeElement === editorCode));
-  formatButtons.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const action = btn.getAttribute("data-action");
-      switch (action) {
-        case "bold":
-          applyInlineWrap("**");
-          break;
-        case "italic":
-          applyInlineWrap("_");
-          break;
-        case "code":
-          applyInlineWrap("`");
-          break;
-        case "quote":
-          insertLinePrefix("> ");
-          break;
-        case "checkbox":
-          insertCheckbox();
-          break;
-        case "h1":
-          insertHeading(1);
-          break;
-        case "h2":
-          insertHeading(2);
-          break;
-        case "h3":
-          insertHeading(3);
-          break;
-        default:
-          break;
-      }
-    });
   });
   previewToggle.addEventListener("click", () => {
     setMode(state.mode === "edit" ? "preview" : "edit");
