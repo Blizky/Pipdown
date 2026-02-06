@@ -17,6 +17,19 @@
   box-sizing: border-box;
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
@@ -70,7 +83,6 @@ body {
 .back-icon {
   width: 22px;
   height: 22px;
-  filter: invert(39%) sepia(14%) saturate(564%) hue-rotate(177deg) brightness(92%) contrast(90%);
 }
 
 .back-text {
@@ -166,7 +178,6 @@ body {
 .action-icon {
   width: 20px;
   height: 20px;
-  filter: invert(35%) sepia(20%) saturate(640%) hue-rotate(176deg) brightness(90%) contrast(88%);
 }
 
 .icon-btn.is-disabled {
@@ -260,6 +271,107 @@ body {
   opacity: 0;
 }
 
+.sheet {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 50;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.sheet.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.sheet-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(10, 18, 28, 0.35);
+}
+
+.sheet-card {
+  position: relative;
+  width: min(92vw, 420px);
+  background: var(--bg);
+  border: 1px solid var(--hairline);
+  border-radius: 18px;
+  padding: 16px;
+  margin-bottom: 25vh;
+  box-shadow: 0 28px 60px rgba(0, 0, 0, 0.2);
+  display: grid;
+  gap: 12px;
+  z-index: 1;
+  transform: translateY(120%);
+  opacity: 0;
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.35s ease;
+  will-change: transform, opacity;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.sheet.is-open .sheet-card {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.sheet-message {
+  font-size: 0.95rem;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.sheet-btn {
+  border: 1px solid var(--ui);
+  background: var(--ui);
+  color: var(--bg);
+  border-radius: 999px;
+  padding: 10px 16px;
+  font-family: var(--title-font);
+  font-size: 0.8rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.sheet-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.sheet-btn-outline {
+  background: transparent;
+  color: var(--ui);
+}
+
+.sheet-btn.is-loading {
+  color: transparent;
+  pointer-events: none;
+  position: relative;
+}
+
+.sheet-btn.is-loading::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #ffffff;
+  animation: sheet-spin 0.7s linear infinite;
+}
+
+@keyframes sheet-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .pipdown-content {
   flex: 1;
   display: flex;
@@ -346,7 +458,6 @@ body {
 .image-missing-icon {
   width: 18px;
   height: 18px;
-  filter: invert(60%) sepia(9%) saturate(460%) hue-rotate(178deg) brightness(92%) contrast(90%);
 }
 
 .file-item:last-child {
@@ -356,6 +467,10 @@ body {
 .file-item .label {
   font-size: 0.98rem;
   color: var(--text);
+}
+
+.file-item[data-type="folder"] .label {
+  font-weight: 600;
 }
 
 .file-item .check {
@@ -408,7 +523,6 @@ body {
 .file-item .icon-img {
   width: 18px;
   height: 18px;
-  filter: invert(35%) sepia(20%) saturate(640%) hue-rotate(176deg) brightness(90%) contrast(88%);
 }
 .file-item[data-type="folder"] .icon {
   width: 18px;
@@ -448,6 +562,10 @@ body {
   line-height: 1.7;
   font-size: 1.15rem;
   min-height: calc(100vh - 140px);
+}
+
+.pipdown-view.is-recycled .editor {
+  color: #9aa5b5;
 }
 
 .editor.wysiwyg {
@@ -500,13 +618,13 @@ body {
 .menu-icon-img {
   width: 20px;
   height: 20px;
-  filter: invert(35%) sepia(20%) saturate(640%) hue-rotate(176deg) brightness(90%) contrast(88%);
 }
 
 .menu-item.is-disabled {
   opacity: 0.4;
   pointer-events: none;
 }
+
 
 .editor.preview h1,
 .editor.preview h2,

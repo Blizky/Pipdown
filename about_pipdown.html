@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>About Pipdown</title>
+    <style>
+      :root {
+        --ink: #111111;
+        --slate: #526581;
+        --bg: #ffffff;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      .page {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 40px 24px 64px;
+      }
+      h1 {
+        margin: 0 0 12px;
+        font-size: 2rem;
+      }
+      h2 {
+        margin: 28px 0 10px;
+        font-size: 1.2rem;
+      }
+      p {
+        line-height: 1.7;
+        margin: 0 0 12px;
+      }
+      a {
+        color: var(--slate);
+        text-decoration: none;
+        border-bottom: 1px solid rgba(82, 101, 129, 0.35);
+      }
+      a:hover {
+        border-bottom-color: var(--slate);
+      }
+      .card {
+        margin-top: 24px;
+        padding: 16px 18px;
+        border: 1px solid rgba(82, 101, 129, 0.2);
+        border-radius: 12px;
+        background: rgba(82, 101, 129, 0.05);
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <h1>About Pipdown</h1>
+      <p>
+        Pipdown is a clean, fast markdown editor designed for writing on the go. It connects to your
+        cloud storage so you can browse folders, open files, and write with a distraction-free
+        interface.
+      </p>
+      <p>
+        Files are plain markdown, so they stay compatible with apps like Typora and Obsidian. Pipdown
+        keeps editing simple and focuses on clarity and speed.
+      </p>
+
+      <h2>How It Works</h2>
+      <p>
+        Connect to Dropbox, browse your folders, and open a markdown file. Changes are saved
+        automatically. Use Preview mode for reading, and Edit mode for writing.
+      </p>
+
+      <div class="card">
+        <p>
+          Repo:
+          <a href="https://github.com/Blizky/Pipdown" target="_blank" rel="noopener">github.com/Blizky/Pipdown</a>
+        </p>
+        <p>
+          Support:
+          <a href="https://ko-fi.com/blizky" target="_blank" rel="noopener">ko-fi.com/blizky</a>
+        </p>
+      </div>
+    </main>
+  </body>
+</html>

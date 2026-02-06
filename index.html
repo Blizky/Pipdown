@@ -24,10 +24,13 @@
             <img src="svg/book_6_line.svg" alt="" class="action-icon" />
           </button>
           <button id="newFileBtn" class="icon-btn select-action" aria-label="New file">
-            <img src="svg/file_line.svg" alt="" class="action-icon" />
+            <img src="svg/file_new_line.svg" alt="" class="action-icon" />
           </button>
           <button id="newFolderBtn" class="icon-btn select-action" aria-label="New folder">
-            <img src="svg/folder_2_line.svg" alt="" class="action-icon" />
+            <img src="svg/new_folder_fill.svg" alt="" class="action-icon" />
+          </button>
+          <button id="insertImageBtn" class="icon-btn select-action" aria-label="Insert image">
+            <img src="svg/pic_line.svg" alt="" class="action-icon" />
           </button>
         </div>
         <div class="topbar-menu">
@@ -52,8 +55,8 @@
             <span>Disconnect</span>
           </button>
           <button id="menuTrashAction" class="menu-item" type="button">
-            <img src="svg/delete_2_line.svg" alt="" class="menu-icon-img" />
-            <span>Delete File</span>
+            <img src="svg/recycle_fill.svg" alt="" class="menu-icon-img" />
+            <span>Recicle File</span>
           </button>
           <button id="menuCopy" class="menu-item" type="button">
             <img src="svg/clipboard_line.svg" alt="" class="menu-icon-img" />
@@ -63,13 +66,13 @@
             <span>Show Status</span>
             <input id="statusToggle" type="checkbox" />
           </label>
-          <label class="menu-item menu-toggle">
-            <span>Show Deleted Items</span>
-            <input id="deletedToggle" type="checkbox" />
-          </label>
           <a class="menu-item menu-link" href="about_markdown.html" target="_blank" rel="noopener">
             <img src="svg/book_6_line.svg" alt="" class="menu-icon-img" />
             <span>About Markdown</span>
+          </a>
+          <a class="menu-item menu-link" href="about_pipdown.html" target="_blank" rel="noopener">
+            <img src="svg/book_6_line.svg" alt="" class="menu-icon-img" />
+            <span>About Pipdown</span>
           </a>
         </div>
       </div>
@@ -84,6 +87,7 @@
           <div id="editorWysiwyg" class="editor wysiwyg" contenteditable="true" spellcheck="true"></div>
           <textarea id="editorCode" class="editor code" spellcheck="false"></textarea>
           <div id="editorPreview" class="editor preview"></div>
+          <input id="imagePicker" class="sr-only" type="file" accept="image/*" tabindex="-1" />
         </section>
       </main>
       <footer class="status-footer">
@@ -91,6 +95,25 @@
         <div id="statusText" class="status-text">Connect Dropbox to get started.</div>
         <div id="wordCount" class="status-text">0 Words</div>
       </footer>
+    </div>
+
+    <div id="recoverSheet" class="sheet" aria-hidden="true">
+      <div class="sheet-backdrop" data-close="true"></div>
+      <div class="sheet-card" role="dialog" aria-modal="true" aria-label="Recover file">
+        <div class="sheet-message">The file was recycled, do you want to recover it?</div>
+        <button id="recoverYes" class="sheet-btn" type="button">Yes</button>
+      </div>
+    </div>
+
+    <div id="connectionSheet" class="sheet" aria-hidden="true">
+      <div class="sheet-backdrop" data-close="true"></div>
+      <div class="sheet-card" role="dialog" aria-modal="true" aria-label="Connection lost">
+        <div class="sheet-message">Connection lost.</div>
+        <div class="sheet-actions">
+          <button id="reconnectBtn" class="sheet-btn" type="button">Reconnect</button>
+          <button id="saveLocalBtn" class="sheet-btn sheet-btn-outline" type="button">Save File</button>
+        </div>
+      </div>
     </div>
 
     <script src="https://unpkg.com/dropbox/dist/Dropbox-sdk.min.js"></script>

@@ -14,11 +14,17 @@ const previewToggle = document.getElementById("previewToggle");
 const editUndoBtn = null;
 // redo removed
 const statusToggle = document.getElementById("statusToggle");
-const deletedToggle = document.getElementById("deletedToggle");
 const menuTrashAction = document.getElementById("menuTrashAction");
 const menuCopy = document.getElementById("menuCopy");
 const deleteUndoBtn = null;
 const undoBtn = document.getElementById("undoBtn");
+const insertImageBtn = document.getElementById("insertImageBtn");
+const imagePicker = document.getElementById("imagePicker");
+const recoverSheet = document.getElementById("recoverSheet");
+const recoverYes = document.getElementById("recoverYes");
+const connectionSheet = document.getElementById("connectionSheet");
+const reconnectBtn = document.getElementById("reconnectBtn");
+const saveLocalBtn = document.getElementById("saveLocalBtn");
 const browserView = document.getElementById("browserView");
 const editorView = document.getElementById("editorView");
 const connectBtn = document.getElementById("connectBtn");
@@ -29,6 +35,8 @@ const TOKEN_KEY = "pipdown-token";
 const CODE_VERIFIER_KEY = "pipdown-code-verifier";
 const SETTINGS_KEY = "pipdown-settings";
 const DROPBOX_APP_KEY = "zses7fnbivgrqgv";
+const OFFLINE_DB = "pipdown-offline";
+const OFFLINE_STORE = "tempFiles";
 
 const memoryStore = new Map();
 const sessionStore = new Map();
@@ -90,13 +98,16 @@ const state = {
   mode: "edit",
   autosaveTimer: null,
   statusTimer: null,
-  showDeleted: false,
-  deletedSet: new Set(),
   undoStack: [],
   canUndo: false,
   lastSavedContent: "",
   undoTimer: null,
   rawMarkdown: "",
+  isRecycledOpen: false,
+  recoverPromptedAt: 0,
+  recoverSheetOpen: false,
+  connectionSheetOpen: false,
+  tempRecoveryPath: null,
 };
 
 function setStatus(message, timeout = 0) {
@@ -119,16 +130,12 @@ function loadSettings() {
   const showStatus = saved.showStatus !== false;
   statusToggle.checked = showStatus;
   document.querySelector(".status-footer").classList.toggle("is-hidden", !showStatus);
-  state.showDeleted = Boolean(saved.showDeleted);
-  if (deletedToggle) {
-    deletedToggle.checked = state.showDeleted;
-  }
 }
+
 
 function saveSettings() {
   const settings = {
     showStatus: statusToggle.checked,
-    showDeleted: state.showDeleted,
   };
   safeSet(SETTINGS_KEY, JSON.stringify(settings));
 }
@@ -145,6 +152,9 @@ function setView(view) {
   editorView.classList.toggle("is-active", view === "editor");
   if (view === "list") {
     editorCode.readOnly = false;
+    setRecycledOpen(false);
+    closeRecoverSheet();
+    closeConnectionSheet();
     state.canUndo = false;
     updateMenuUndoState();
   }
@@ -169,10 +179,15 @@ function updateTopbar() {
 function updateToolbarState() {
   const connected = Boolean(ensureDropbox());
   const inEditor = state.view === "editor";
+  const canEdit = inEditor && state.mode === "edit" && !state.isRecycledOpen;
   previewToggle.classList.toggle("is-disabled", !inEditor);
   newFileBtn.classList.toggle("is-disabled", !connected || inEditor);
   newFolderBtn.classList.toggle("is-disabled", !connected || inEditor);
+  if (insertImageBtn) {
+    insertImageBtn.classList.toggle("is-disabled", !connected || !canEdit);
+  }
 }
+
 
 function updateMenuAuth() {
   const connected = Boolean(ensureDropbox());
@@ -185,7 +200,7 @@ function updateTrashMenuLabel() {
   const label = menuTrashAction.querySelector("span");
   if (!label) return;
   if (state.view === "editor") {
-    label.textContent = "Delete File";
+    label.textContent = isRecycledName(state.currentFileName) ? "Recover File" : "Recicle File";
     menuTrashAction.style.display = "flex";
   } else {
     menuTrashAction.style.display = "none";
@@ -232,7 +247,6 @@ async function listFolder(path = "") {
     setStatus("Loading...");
     const response = await dbx.filesListFolder({ path });
     state.currentPath = path;
-    await loadDeletedSet(path);
     state.currentFile = null;
     state.currentFileName = "";
     const entries = (response.result.entries || []).filter((entry) => {
@@ -240,8 +254,7 @@ async function listFolder(path = "") {
       if (entry[".tag"] === "folder") return true;
       return entry.name.toLowerCase().endsWith(".md");
     });
-    const visible = state.showDeleted ? entries : entries.filter((entry) => !state.deletedSet.has(entry.name));
-    renderFileList(visible);
+    renderFileList(entries);
     setView("list");
     setStatus("");
   } catch (error) {
@@ -265,6 +278,13 @@ function renderFileList(entries) {
     if (aIsFolder !== bIsFolder) {
       return aIsFolder ? -1 : 1;
     }
+    if (!aIsFolder && !bIsFolder) {
+      const aRecycled = a.name.toLowerCase().startsWith("(recicled)");
+      const bRecycled = b.name.toLowerCase().startsWith("(recicled)");
+      if (aRecycled !== bRecycled) {
+        return aRecycled ? 1 : -1;
+      }
+    }
     return a.name.localeCompare(b.name);
   });
 
@@ -286,7 +306,7 @@ function renderFileList(entries) {
     const iconImg = document.createElement("img");
     iconImg.className = "icon-img";
     iconImg.alt = "";
-    iconImg.src = entry[".tag"] === "folder" ? "svg/folder_2_line.svg" : "svg/file_line.svg";
+    iconImg.src = entry[".tag"] === "folder" ? "svg/folder_fill.svg" : "svg/file_line.svg";
     icon.appendChild(iconImg);
 
     const label = document.createElement("div");
@@ -307,7 +327,7 @@ function renderFileList(entries) {
       meta.textContent = "File";
     }
 
-    if (state.deletedSet.has(entry.name)) {
+    if (entry.name.toLowerCase().startsWith("(recicled)")) {
       item.classList.add("is-deleted");
     }
     item.appendChild(icon);
@@ -335,17 +355,13 @@ async function handleEntry(entry, item) {
   const dbx = ensureDropbox();
   try {
     setStatus("Opening...");
-    if (state.showDeleted && state.deletedSet.has(entry.name)) {
-      state.deletedSet.delete(entry.name);
-      await saveDeletedSet(state.currentPath);
-    }
     const response = await dbx.filesDownload({ path: entry.path_lower });
     const blob = response.result.fileBlob;
     const text = await blob.text();
     state.currentFile = entry.path_lower;
     state.currentFileName = entry.name;
     setCurrentMarkdown(text);
-    editorCode.readOnly = false;
+    setRecycledOpen(isRecycledName(entry.name));
     setMode("edit");
     setView("editor");
     setStatus("");
@@ -358,60 +374,79 @@ async function handleEntry(entry, item) {
   }
 }
 
-const DELETED_NOTE = ".pipdown_deleted.json";
-
-function deletedNotePath(path) {
-  return `${path || ""}/${DELETED_NOTE}`.replace("//", "/");
-}
-
-async function loadDeletedSet(path) {
-  const dbx = ensureDropbox();
-  if (!dbx) {
-    state.deletedSet = new Set();
-    return;
-  }
-  try {
-    const response = await dbx.filesDownload({ path: deletedNotePath(path) });
-    const blob = response.result.fileBlob;
-    const text = await blob.text();
-    const list = JSON.parse(text || "[]");
-    state.deletedSet = new Set(Array.isArray(list) ? list : []);
-  } catch (error) {
-    const tag = error?.error?.error?.[".tag"];
-    if (tag === "path" || tag === "path/not_found") {
-      state.deletedSet = new Set();
-    } else {
-      console.error(error);
-      state.deletedSet = new Set();
-    }
-  }
-}
-
-async function saveDeletedSet(path) {
-  const dbx = ensureDropbox();
-  if (!dbx) return;
-  const list = Array.from(state.deletedSet);
-  try {
-    await dbx.filesUpload({
-      path: deletedNotePath(path),
-      contents: JSON.stringify(list),
-      mode: { ".tag": "overwrite" },
-    });
-  } catch (error) {
-    console.error(error);
-  }
-}
-
 async function deleteCurrentFile() {
   const dbx = ensureDropbox();
   if (!dbx || !state.currentFileName) {
     return;
   }
-  state.deletedSet.add(state.currentFileName);
-  await saveDeletedSet(state.currentPath);
-  setStatus("Deleted.", 1200);
-  setView("list");
-  listFolder(state.currentPath || "");
+  const prefix = "(recicled) ";
+  const currentName = state.currentFileName;
+  const isRecycled = isRecycledName(currentName);
+  if (isRecycled) {
+    await recoverCurrentFile();
+    return;
+  }
+  const nextName = `${prefix}${currentName}`;
+  const fromPath = `${state.currentPath}/${currentName}`.replace("//", "/");
+  const toPath = `${state.currentPath}/${nextName}`.replace("//", "/");
+  try {
+    await dbx.filesMoveV2({
+      from_path: fromPath,
+      to_path: toPath,
+      autorename: true,
+    });
+    setStatus("Recicled.", 1200);
+    state.currentFile = null;
+    state.currentFileName = "";
+    setView("list");
+    listFolder(state.currentPath || "");
+  } catch (error) {
+    console.error(error);
+    setStatus("Could not recicle file.");
+  }
+}
+
+function isRecycledName(name) {
+  if (!name) return false;
+  return name.toLowerCase().startsWith("(recicled) ");
+}
+
+async function recoverCurrentFile() {
+  const dbx = ensureDropbox();
+  if (!dbx || !state.currentFileName) {
+    return false;
+  }
+  if (!isRecycledName(state.currentFileName)) {
+    return false;
+  }
+  const prefix = "(recicled) ";
+  const currentName = state.currentFileName;
+  const nextName = currentName.slice(prefix.length);
+  const fromPath = `${state.currentPath}/${currentName}`.replace("//", "/");
+  const toPath = `${state.currentPath}/${nextName}`.replace("//", "/");
+  try {
+    await dbx.filesMoveV2({
+      from_path: fromPath,
+      to_path: toPath,
+      autorename: true,
+    });
+    const response = await dbx.filesDownload({ path: toPath });
+    const blob = response.result.fileBlob;
+    const text = await blob.text();
+    state.currentFile = toPath;
+    state.currentFileName = nextName;
+    setCurrentMarkdown(text);
+    setRecycledOpen(false);
+    setMode("edit");
+    setView("editor");
+    updateFooterFile();
+    setStatus("FILE WAS RECOVERED", 2000);
+    return true;
+  } catch (error) {
+    console.error(error);
+    setStatus("Could not recover file.");
+    return false;
+  }
 }
 
 async function createFolder() {
@@ -425,7 +460,7 @@ async function createFolder() {
   const path = `${state.currentPath}/${name}`.replace("//", "/");
   try {
     await dbx.filesCreateFolderV2({ path });
-    listFolder(state.currentPath);
+    listFolder(path);
   } catch (error) {
     console.error(error);
     setStatus("Could not create folder.");
@@ -500,6 +535,215 @@ function updateMenuUndoState() {
   if (!undoBtn) return;
   const enabled = state.view === "editor" && state.undoStack.length > 1;
   undoBtn.classList.toggle("is-disabled", !enabled);
+}
+
+function setRecycledOpen(isRecycled) {
+  state.isRecycledOpen = isRecycled;
+  editorView.classList.toggle("is-recycled", isRecycled);
+  editorCode.readOnly = isRecycled;
+}
+
+function openRecoverSheet() {
+  if (!recoverSheet || state.recoverSheetOpen) return;
+  state.recoverSheetOpen = true;
+  recoverSheet.classList.add("is-open");
+  recoverSheet.setAttribute("aria-hidden", "false");
+}
+
+function closeRecoverSheet() {
+  if (!recoverSheet) return;
+  state.recoverSheetOpen = false;
+  recoverSheet.classList.remove("is-open");
+  recoverSheet.setAttribute("aria-hidden", "true");
+}
+
+function openConnectionSheet() {
+  if (!connectionSheet || state.connectionSheetOpen) return;
+  state.connectionSheetOpen = true;
+  connectionSheet.classList.add("is-open");
+  connectionSheet.setAttribute("aria-hidden", "false");
+}
+
+function closeConnectionSheet() {
+  if (!connectionSheet) return;
+  state.connectionSheetOpen = false;
+  connectionSheet.classList.remove("is-open");
+  connectionSheet.setAttribute("aria-hidden", "true");
+}
+
+function openOfflineDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(OFFLINE_DB, 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(OFFLINE_STORE)) {
+        db.createObjectStore(OFFLINE_STORE, { keyPath: "path" });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function saveTempFile(path, name, content) {
+  if (!path) return;
+  const db = await openOfflineDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(OFFLINE_STORE, "readwrite");
+    tx.objectStore(OFFLINE_STORE).put({
+      path,
+      name,
+      content,
+      savedAt: Date.now(),
+    });
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function loadTempFile(path) {
+  if (!path) return null;
+  const db = await openOfflineDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(OFFLINE_STORE, "readonly");
+    const request = tx.objectStore(OFFLINE_STORE).get(path);
+    request.onsuccess = () => resolve(request.result || null);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function deleteTempFile(path) {
+  if (!path) return;
+  const db = await openOfflineDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(OFFLINE_STORE, "readwrite");
+    tx.objectStore(OFFLINE_STORE).delete(path);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+function buildRecoveredName(name, suffix) {
+  const base = name.replace(/\.md$/i, "");
+  const tag = suffix > 1 ? `(recovered ${suffix}) ` : "(recovered) ";
+  return `${tag}${base}.md`;
+}
+
+async function findAvailableRecoveredPath(folderPath, originalName) {
+  const dbx = ensureDropbox();
+  if (!dbx) return null;
+  for (let i = 1; i < 50; i += 1) {
+    const candidateName = buildRecoveredName(originalName, i);
+    const candidatePath = `${folderPath}/${candidateName}`.replace("//", "/");
+    try {
+      await dbx.filesGetMetadata({ path: candidatePath });
+    } catch (error) {
+      const tag = error?.error?.error?.[".tag"];
+      if (tag === "path" || tag === "path/not_found") {
+        return { path: candidatePath, name: candidateName };
+      }
+    }
+  }
+  return null;
+}
+
+async function handleConnectionLost() {
+  if (!state.currentFile) return;
+  try {
+    await saveTempFile(state.currentFile, state.currentFileName, getCurrentMarkdown());
+    state.tempRecoveryPath = state.currentFile;
+  } catch (error) {
+    console.error(error);
+  }
+  setStatus("Connection lost.", 2000);
+  openConnectionSheet();
+}
+
+async function attemptReconnect() {
+  const temp = await loadTempFile(state.tempRecoveryPath || state.currentFile);
+  if (!temp) {
+    closeConnectionSheet();
+    return;
+  }
+  const dbx = ensureDropbox();
+  if (!dbx) {
+    setStatus("Connect Dropbox first.");
+    return;
+  }
+  try {
+    const response = await dbx.filesDownload({ path: temp.path });
+    const blob = response.result.fileBlob;
+    const online = await blob.text();
+    if (online === temp.content) {
+      await deleteTempFile(temp.path);
+      closeConnectionSheet();
+      setStatus("Connection restored.", 1200);
+      await openFileByPath(temp.path, temp.name);
+      return;
+    }
+    const target = await findAvailableRecoveredPath(state.currentPath || "", temp.name);
+    if (!target) {
+      setStatus("Could not recover file.");
+      return;
+    }
+    await dbx.filesUpload({
+      path: target.path,
+      contents: temp.content,
+      mode: { ".tag": "add" },
+    });
+    await deleteTempFile(temp.path);
+    closeConnectionSheet();
+    const folderName = (state.currentPath || "").split("/").filter(Boolean).pop() || "root";
+    setStatus(
+      `Online version was different, the file has been saved as [${target.name}] on [${folderName}].`,
+      3000
+    );
+    listFolder(state.currentPath || "");
+  } catch (error) {
+    console.error(error);
+    setStatus("Reconnect failed.");
+  }
+}
+
+function saveTempAsDownload() {
+  const path = state.tempRecoveryPath || state.currentFile;
+  if (!path) return;
+  loadTempFile(path)
+    .then((temp) => {
+      if (!temp) return;
+      const name = buildRecoveredName(temp.name, 1);
+      const blob = new Blob([temp.content], { type: "text/markdown" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = name;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      closeConnectionSheet();
+      setStatus("Saved locally.", 1200);
+    })
+    .catch((error) => console.error(error));
+}
+
+async function openFileByPath(path, nameHint) {
+  const dbx = ensureDropbox();
+  if (!dbx || !path) return;
+  try {
+    const response = await dbx.filesDownload({ path });
+    const blob = response.result.fileBlob;
+    const text = await blob.text();
+    state.currentFile = path;
+    state.currentFileName = nameHint || path.split("/").pop() || "";
+    setCurrentMarkdown(text);
+    setRecycledOpen(isRecycledName(state.currentFileName));
+    setMode("edit");
+    setView("editor");
+    updateFooterFile();
+  } catch (error) {
+    console.error(error);
+  }
 }
 
 function updateFooterFile() {
@@ -593,14 +837,13 @@ function setMode(mode) {
     editorPreview.style.display = "block";
     previewToggle.querySelector("img").src = "svg/edit_2_fill.svg";
     previewToggle.setAttribute("aria-label", "Edit");
-    updateFormatBarVisibility(false);
   } else {
     editorPreview.style.display = "none";
     editorCode.style.display = "block";
     previewToggle.querySelector("img").src = "svg/book_6_line.svg";
     previewToggle.setAttribute("aria-label", "Preview");
-    updateFormatBarVisibility(true);
   }
+  updateToolbarState();
 }
 async function saveFile({ silent } = {}) {
   const dbx = ensureDropbox();
@@ -631,6 +874,7 @@ async function saveFile({ silent } = {}) {
   } catch (error) {
     console.error(error);
     setStatus("Save failed.");
+    await handleConnectionLost();
   }
 }
 
@@ -692,6 +936,122 @@ function handlePaste(event) {
   state.rawMarkdown = editorCode.value;
   scheduleAutosave();
   updateWordCount();
+}
+
+function maybePromptRecover() {
+  if (!state.isRecycledOpen) return;
+  openRecoverSheet();
+}
+
+function insertMarkdownAtCursor(text) {
+  const start = editorCode.selectionStart;
+  const end = editorCode.selectionEnd;
+  const value = editorCode.value;
+  editorCode.value = value.slice(0, start) + text + value.slice(end);
+  const nextPos = start + text.length;
+  editorCode.selectionStart = editorCode.selectionEnd = nextPos;
+  state.rawMarkdown = editorCode.value;
+  updateWordCount();
+  scheduleAutosave();
+}
+
+async function fileToImage(file) {
+  const url = URL.createObjectURL(file);
+  try {
+    if ("createImageBitmap" in window) {
+      const bitmap = await createImageBitmap(file);
+      return { bitmap, url };
+    }
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+    return { bitmap: img, url };
+  } catch (error) {
+    URL.revokeObjectURL(url);
+    throw error;
+  }
+}
+
+async function compressWithWatermark(file) {
+  const { bitmap, url } = await fileToImage(file);
+  try {
+    const maxWidth = 1600;
+    const width = bitmap.width || bitmap.naturalWidth;
+    const height = bitmap.height || bitmap.naturalHeight;
+    const scale = width > maxWidth ? maxWidth / width : 1;
+    const targetWidth = Math.round(width * scale);
+    const targetHeight = Math.round(height * scale);
+    const canvas = document.createElement("canvas");
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(bitmap, 0, 0, targetWidth, targetHeight);
+
+    const fontSize = Math.max(14, Math.round(targetWidth * 0.02));
+    ctx.font = `${fontSize}px system-ui, -apple-system, \"Segoe UI\", sans-serif`;
+    ctx.fillStyle = "rgba(82, 101, 129, 0.75)";
+    ctx.textBaseline = "bottom";
+    ctx.shadowColor = "rgba(255, 255, 255, 0.6)";
+    ctx.shadowBlur = 4;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+    ctx.fillText("Pipdown", 10, targetHeight - 10);
+
+    const blob = await new Promise((resolve) => {
+      canvas.toBlob((b) => resolve(b), "image/jpeg", 0.82);
+    });
+    return blob;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+function sanitizeBaseName(name) {
+  const base = name.replace(/\.[^/.]+$/, "");
+  return base.replace(/[^a-z0-9-_]+/gi, "_").replace(/^_+|_+$/g, "") || "image";
+}
+
+async function uploadImageBlob(blob, originalName) {
+  const dbx = ensureDropbox();
+  if (!dbx) {
+    setStatus("Connect Dropbox first.");
+    return null;
+  }
+  const base = sanitizeBaseName(originalName);
+  const filename = `${base}.jpg`;
+  const path = `${state.currentPath}/${filename}`.replace("//", "/");
+  const response = await dbx.filesUpload({
+    path,
+    contents: blob,
+    mode: { ".tag": "add" },
+  });
+  return response.result.name;
+}
+
+async function handleInsertImage(file) {
+  if (!file || !state.currentFile) {
+    return;
+  }
+  try {
+    setStatus("Preparing image...");
+    const blob = await compressWithWatermark(file);
+    if (!blob) {
+      setStatus("Image failed.");
+      return;
+    }
+    setStatus("Uploading image...");
+    const name = await uploadImageBlob(blob, file.name);
+    if (!name) {
+      setStatus("Image upload failed.");
+      return;
+    }
+    const markdown = `![${name}](${name})\n`;
+    insertMarkdownAtCursor(markdown);
+    setStatus("Image inserted.", 1200);
+  } catch (error) {
+    console.error(error);
+    setStatus("Image upload failed.");
+  }
 }
 
 async function handleAuthRedirect() {
@@ -758,6 +1118,60 @@ function setupListeners() {
   newFolderBtn.addEventListener("click", () => {
     createFolder();
   });
+  if (insertImageBtn && imagePicker) {
+    insertImageBtn.addEventListener("click", () => {
+      if (insertImageBtn.classList.contains("is-disabled")) {
+        return;
+      }
+      imagePicker.value = "";
+      imagePicker.click();
+    });
+    imagePicker.addEventListener("change", () => {
+      const file = imagePicker.files && imagePicker.files[0];
+      if (file) {
+        handleInsertImage(file);
+      }
+    });
+  }
+  if (recoverSheet) {
+    recoverSheet.addEventListener("click", (event) => {
+      const target = event.target;
+      if (target && target.getAttribute("data-close") === "true") {
+        closeRecoverSheet();
+      }
+    });
+  }
+  if (connectionSheet) {
+    connectionSheet.addEventListener("click", (event) => {
+      const target = event.target;
+      if (target && target.getAttribute("data-close") === "true") {
+        closeConnectionSheet();
+      }
+    });
+  }
+  if (recoverYes) {
+    recoverYes.addEventListener("click", async () => {
+      if (recoverYes.classList.contains("is-loading")) {
+        return;
+      }
+      recoverYes.classList.add("is-loading");
+      const recovered = await recoverCurrentFile();
+      recoverYes.classList.remove("is-loading");
+      if (recovered) {
+        closeRecoverSheet();
+      }
+    });
+  }
+  if (reconnectBtn) {
+    reconnectBtn.addEventListener("click", () => {
+      attemptReconnect();
+    });
+  }
+  if (saveLocalBtn) {
+    saveLocalBtn.addEventListener("click", () => {
+      saveTempAsDownload();
+    });
+  }
   menuToggle.addEventListener("click", (event) => {
     event.stopPropagation();
     toggleMenu();
@@ -796,13 +1210,6 @@ function setupListeners() {
     saveSettings();
     document.querySelector(".status-footer").classList.toggle("is-hidden", !statusToggle.checked);
   });
-  if (deletedToggle) {
-    deletedToggle.addEventListener("change", () => {
-      state.showDeleted = deletedToggle.checked;
-      saveSettings();
-      listFolder(state.currentPath || "");
-    });
-  }
   if (undoBtn) {
     undoBtn.addEventListener("click", () => {
       if (state.undoStack.length <= 1) {
@@ -830,6 +1237,9 @@ function setupListeners() {
     updateWordCount();
     scheduleUndoSnapshot();
   });
+  editorCode.addEventListener("mousedown", maybePromptRecover);
+  editorCode.addEventListener("focus", maybePromptRecover);
+  editorPreview.addEventListener("click", maybePromptRecover);
   previewToggle.addEventListener("click", () => {
     setMode(state.mode === "edit" ? "preview" : "edit");
   });
