@@ -20,8 +20,8 @@
           </div>
         </div>
         <div class="topbar-actions">
-          <button id="undoBtn" class="icon-btn select-action undo-right" aria-label="Undo">
-            <img src="svg/back_2_fill.svg" alt="" class="action-icon" />
+          <button id="pinToggle" class="icon-btn select-action" aria-label="Pin folder">
+            <img src="svg/pin_line.svg" alt="" class="action-icon" />
           </button>
           <button id="previewToggle" class="icon-btn select-action" aria-label="Preview">
             <img src="svg/book_6_line.svg" alt="" class="action-icon" />
@@ -56,6 +56,18 @@
             <img src="svg/clipboard_line.svg" alt="" class="menu-icon-img" />
             <span>Copy to Clipboard</span>
           </button>
+          <button id="menuRenameFile" class="menu-item" type="button">
+            <img src="svg/edit_2_line.svg" alt="" class="menu-icon-img" />
+            <span>Rename file</span>
+          </button>
+          <button id="menuRenameFolder" class="menu-item" type="button">
+            <img src="svg/edit_2_line.svg" alt="" class="menu-icon-img" />
+            <span>Rename folder</span>
+          </button>
+          <button id="menuInsertTodo" class="menu-item" type="button">
+            <img src="svg/checkbox_line.svg" alt="" class="menu-icon-img" />
+            <span>Insert todo</span>
+          </button>
           <button id="menuNewFile" class="menu-item" type="button">
             <img src="svg/file_new_line.svg" alt="" class="menu-icon-img" />
             <span>New file</span>
@@ -67,6 +79,14 @@
           <button id="menuInsertImage" class="menu-item" type="button">
             <img src="svg/pic_line.svg" alt="" class="menu-icon-img" />
             <span>Insert picture</span>
+          </button>
+          <button id="menuPinned" class="menu-item" type="button">
+            <img src="svg/pin_2_line.svg" alt="" class="menu-icon-img" />
+            <span>Pinned folders</span>
+          </button>
+          <button id="menuTheme" class="menu-item" type="button">
+            <img src="svg/toggle_right_fill.svg" alt="" class="menu-icon-img" />
+            <span>Dark mode</span>
           </button>
           <label class="menu-item menu-toggle">
             <span>Show status</span>

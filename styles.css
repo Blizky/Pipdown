@@ -13,6 +13,18 @@
   --mono-font: "SF Mono", "Cascadia Mono", "Courier Prime", "Source Code Pro", monospace;
 }
 
+body.theme-dark {
+  color-scheme: dark;
+  --bg: #101215;
+  --bg-soft: #15181d;
+  --text: #f3f5f7;
+  --muted: #9aa6b5;
+  --line: #f3f5f7;
+  --hairline: rgba(154, 166, 181, 0.22);
+  --accent: #8aa1c2;
+  --ui: #8aa1c2;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -36,6 +48,10 @@ body {
   background: linear-gradient(180deg, #ffffff 0%, #f9f9f9 100%);
   color: var(--ui);
   font-family: var(--body-font);
+}
+
+body.theme-dark {
+  background: linear-gradient(180deg, #0d0f12 0%, #11141a 100%);
 }
 
 .pipdown-app {
@@ -93,7 +109,6 @@ body {
   font-family: var(--title-font);
   font-size: 0.85rem;
   letter-spacing: 0.06em;
-  text-transform: uppercase;
 }
 
 .topbar-icon {
@@ -107,6 +122,7 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 24vw;
+  font-weight: 700;
 }
 
 .back-icon {
@@ -451,6 +467,25 @@ body {
 
 .file-item.is-deleted {
   opacity: 0.45;
+}
+
+.file-item.is-missing {
+  opacity: 0.5;
+}
+
+.file-item .pin-action {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.file-item .pin-action img {
+  width: 16px;
+  height: 16px;
 }
 
 .image-missing {

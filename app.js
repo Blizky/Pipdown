@@ -16,11 +16,16 @@ const editUndoBtn = null;
 const statusToggle = document.getElementById("statusToggle");
 const menuTrashAction = document.getElementById("menuTrashAction");
 const menuCopy = document.getElementById("menuCopy");
+const menuRenameFile = document.getElementById("menuRenameFile");
+const menuRenameFolder = document.getElementById("menuRenameFolder");
 const menuNewFile = document.getElementById("menuNewFile");
 const menuNewFolder = document.getElementById("menuNewFolder");
 const menuInsertImage = document.getElementById("menuInsertImage");
+const menuInsertTodo = document.getElementById("menuInsertTodo");
+const menuPinned = document.getElementById("menuPinned");
+const menuTheme = document.getElementById("menuTheme");
+const pinToggle = document.getElementById("pinToggle");
 const deleteUndoBtn = null;
-const undoBtn = document.getElementById("undoBtn");
 const insertImageBtn = document.getElementById("insertImageBtn");
 const imagePicker = document.getElementById("imagePicker");
 const connectionSheet = document.getElementById("connectionSheet");
@@ -41,6 +46,7 @@ const SETTINGS_KEY = "pipdown-settings";
 const DROPBOX_APP_KEY = "zses7fnbivgrqgv";
 const OFFLINE_DB = "pipdown-offline";
 const OFFLINE_STORE = "tempFiles";
+const PINNED_KEY = "pipdown-pins";
 
 const memoryStore = new Map();
 const sessionStore = new Map();
@@ -110,6 +116,10 @@ const state = {
   connectionSheetOpen: false,
   tempRecoveryPath: null,
   deleteSheetOpen: false,
+  lastPath: "",
+  pinnedFolders: [],
+  listMode: "normal",
+  theme: "light",
 };
 
 function setStatus(message, timeout = 0) {
@@ -132,12 +142,19 @@ function loadSettings() {
   const showStatus = saved.showStatus !== false;
   statusToggle.checked = showStatus;
   document.querySelector(".status-footer").classList.toggle("is-hidden", !showStatus);
+  state.lastPath = saved.lastPath || "";
+  state.theme = saved.theme || "light";
+  applyTheme(state.theme);
+  const pins = JSON.parse(safeGet(PINNED_KEY) || "[]");
+  state.pinnedFolders = Array.isArray(pins) ? pins : [];
 }
 
 
 function saveSettings() {
   const settings = {
     showStatus: statusToggle.checked,
+    lastPath: state.lastPath || "",
+    theme: state.theme,
   };
   safeSet(SETTINGS_KEY, JSON.stringify(settings));
 }
@@ -157,7 +174,6 @@ function setView(view) {
     closeConnectionSheet();
     closeDeleteSheet();
     state.canUndo = false;
-    updateMenuUndoState();
   }
   updateTopbar();
   updateTrashMenuLabel();
@@ -166,7 +182,8 @@ function setView(view) {
 
 function updateTopbar() {
   if (state.view === "editor") {
-    setTitle(state.currentFileName || "Untitled");
+    const displayName = (state.currentFileName || "Untitled").replace(/\.md$/i, "");
+    setTitle(displayName);
     const titleIcon = document.querySelector("#topbarTitle .topbar-icon");
     if (titleIcon) {
       titleIcon.src = "svg/file_line.svg";
@@ -190,6 +207,15 @@ function updateToolbarState() {
   const inEditor = state.view === "editor";
   const canEdit = inEditor && state.mode === "edit";
   previewToggle.classList.toggle("is-disabled", !inEditor);
+  if (pinToggle) {
+    pinToggle.style.display = state.view === "list" ? "inline-flex" : "none";
+    pinToggle.classList.toggle("is-disabled", !connected || !state.currentPath);
+    const isPinned = isCurrentFolderPinned();
+    const img = pinToggle.querySelector("img");
+    if (img) {
+      img.src = isPinned ? "svg/pin_2_fill.svg" : "svg/pin_line.svg";
+    }
+  }
   if (newFileBtn) {
     newFileBtn.classList.toggle("is-disabled", !connected || inEditor);
   }
@@ -207,6 +233,145 @@ function sanitizeFileTitle(title) {
     .replace(/\s+/g, " ")
     .trim();
   return cleaned || "";
+}
+
+function applyTheme(theme) {
+  document.body.classList.toggle("theme-dark", theme === "dark");
+}
+
+function toggleTheme() {
+  state.theme = state.theme === "dark" ? "light" : "dark";
+  applyTheme(state.theme);
+  saveSettings();
+  updateTrashMenuLabel();
+}
+
+function isCurrentFolderPinned() {
+  if (!state.currentPath) return false;
+  return state.pinnedFolders.some((item) => item.path === state.currentPath);
+}
+
+function togglePinCurrentFolder() {
+  if (!state.currentPath) return;
+  const existing = state.pinnedFolders.find((item) => item.path === state.currentPath);
+  if (existing) {
+    state.pinnedFolders = state.pinnedFolders.filter((item) => item.path !== state.currentPath);
+  } else {
+    const name = state.currentPath.split("/").filter(Boolean).pop() || "Folder";
+    state.pinnedFolders.push({ path: state.currentPath, name });
+  }
+  safeSet(PINNED_KEY, JSON.stringify(state.pinnedFolders));
+  updateToolbarState();
+  updateTrashMenuLabel();
+}
+
+async function openPinnedFolders() {
+  state.listMode = "pinned";
+  renderPinnedFolders();
+}
+
+async function renderPinnedFolders() {
+  fileList.innerHTML = "";
+  if (!state.pinnedFolders.length) {
+    const empty = document.createElement("div");
+    empty.className = "empty-message";
+    empty.innerHTML = "<img src=\"svg/warning_fill.svg\" alt=\"\" class=\"image-missing-icon\" /><span>No pinned folders yet</span>";
+    fileList.appendChild(empty);
+    return;
+  }
+  const dbx = ensureDropbox();
+  const pinned = [...state.pinnedFolders];
+  for (const entry of pinned) {
+    let exists = true;
+    if (dbx) {
+      try {
+        await dbx.filesGetMetadata({ path: entry.path });
+      } catch (error) {
+        exists = false;
+      }
+    }
+    const item = document.createElement("div");
+    item.className = "file-item";
+    if (!exists) {
+      item.classList.add("is-missing");
+    }
+    item.dataset.type = "folder";
+
+    const icon = document.createElement("div");
+    icon.className = "icon";
+    const iconImg = document.createElement("img");
+    iconImg.className = "icon-img";
+    iconImg.alt = "";
+    iconImg.src = "svg/folder_fill.svg";
+    icon.appendChild(iconImg);
+
+    const label = document.createElement("div");
+    label.className = "label";
+    label.textContent = entry.name;
+
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    if (!exists) {
+      meta.textContent = "Missing";
+    } else {
+      const pinBtn = document.createElement("button");
+      pinBtn.className = "pin-action";
+      const pinImg = document.createElement("img");
+      pinImg.src = "svg/pin_2_fill.svg";
+      pinImg.alt = "";
+      pinBtn.appendChild(pinImg);
+      pinBtn.addEventListener("click", (event) => {
+        event.stopPropagation();
+        state.pinnedFolders = state.pinnedFolders.filter((item) => item.path !== entry.path);
+        safeSet(PINNED_KEY, JSON.stringify(state.pinnedFolders));
+        renderPinnedFolders();
+        updateTrashMenuLabel();
+        updateToolbarState();
+      });
+      meta.appendChild(pinBtn);
+    }
+
+    item.appendChild(icon);
+    item.appendChild(label);
+    item.appendChild(meta);
+
+    item.addEventListener("click", async () => {
+      if (!exists) {
+        const ok = confirm("This folder no longer exists in Dropbox. Do you want to unpin it?");
+        if (ok) {
+          state.pinnedFolders = state.pinnedFolders.filter((item) => item.path !== entry.path);
+          safeSet(PINNED_KEY, JSON.stringify(state.pinnedFolders));
+          renderPinnedFolders();
+          updateTrashMenuLabel();
+          updateToolbarState();
+        }
+        return;
+      }
+      state.listMode = "normal";
+      await listFolder(entry.path);
+    });
+
+    fileList.appendChild(item);
+  }
+}
+
+async function findAvailableFolderPath(parentPath, baseName) {
+  const dbx = ensureDropbox();
+  if (!dbx) return null;
+  for (let i = 0; i < 50; i += 1) {
+    const suffix = i === 0 ? "" : ` (${i + 1})`;
+    const folderName = `${baseName}${suffix}`;
+    const candidatePath = `${parentPath}/${folderName}`.replace("//", "/");
+    try {
+      await dbx.filesGetMetadata({ path: candidatePath });
+    } catch (error) {
+      const tag = error?.error?.error?.[".tag"];
+      if (tag === "path" || tag === "path/not_found") {
+        return { path: candidatePath, name: folderName };
+      }
+    }
+  }
+  return null;
 }
 
 
@@ -229,6 +394,14 @@ function updateTrashMenuLabel() {
   if (menuCopy) {
     menuCopy.style.display = state.view === "editor" ? "flex" : "none";
   }
+  if (menuRenameFile) {
+    menuRenameFile.style.display = state.view === "editor" ? "flex" : "none";
+    menuRenameFile.classList.toggle("is-disabled", !ensureDropbox());
+  }
+  if (menuRenameFolder) {
+    menuRenameFolder.style.display = state.view === "list" ? "flex" : "none";
+    menuRenameFolder.classList.toggle("is-disabled", !ensureDropbox() || !state.currentPath);
+  }
   if (menuNewFile) {
     menuNewFile.style.display = state.view === "list" ? "flex" : "none";
     menuNewFile.classList.toggle("is-disabled", !ensureDropbox());
@@ -237,9 +410,26 @@ function updateTrashMenuLabel() {
     menuNewFolder.style.display = state.view === "list" ? "flex" : "none";
     menuNewFolder.classList.toggle("is-disabled", !ensureDropbox());
   }
+  if (menuInsertTodo) {
+    menuInsertTodo.style.display = state.view === "editor" ? "flex" : "none";
+    menuInsertTodo.classList.toggle("is-disabled", !ensureDropbox() || state.mode !== "edit");
+  }
   if (menuInsertImage) {
     menuInsertImage.style.display = state.view === "editor" ? "flex" : "none";
-    menuInsertImage.classList.toggle("is-disabled", !ensureDropbox());
+    menuInsertImage.classList.toggle("is-disabled", !ensureDropbox() || state.mode !== "edit");
+  }
+  if (menuPinned) {
+    menuPinned.style.display = state.pinnedFolders.length ? "flex" : "none";
+  }
+  if (menuTheme) {
+    const label = menuTheme.querySelector("span");
+    const icon = menuTheme.querySelector("img");
+    if (label) {
+      label.textContent = state.theme === "dark" ? "Light mode" : "Dark mode";
+    }
+    if (icon) {
+      icon.src = state.theme === "dark" ? "svg/toggle_left_fill.svg" : "svg/toggle_right_fill.svg";
+    }
   }
 }
 
@@ -288,6 +478,7 @@ async function listFolder(path = "") {
   connectBtn.classList.add("is-hidden");
   try {
     setStatus("Loading...");
+    state.listMode = "normal";
     const response = await dbx.filesListFolder({ path });
     state.currentPath = path;
     state.currentFile = null;
@@ -297,6 +488,8 @@ async function listFolder(path = "") {
       if (entry[".tag"] === "folder") return true;
       return entry.name.toLowerCase().endsWith(".md");
     });
+    state.lastPath = path;
+    saveSettings();
     renderFileList(entries);
     setView("list");
     updateFooterFile();
@@ -479,6 +672,90 @@ async function createFile() {
   }
 }
 
+async function renameCurrentFile() {
+  if (!state.currentFileName) return;
+  const proposed = prompt("New file name?", state.currentFileName.replace(/\.md$/i, ""));
+  if (!proposed) return;
+  const dbx = ensureDropbox();
+  if (!dbx) {
+    setStatus("Connect Dropbox first.");
+    return;
+  }
+  const trimmed = sanitizeFileTitle(proposed);
+  if (!trimmed) return;
+  const base = trimmed.replace(/\.md$/i, "");
+  const desiredName = `${base}.md`;
+  if (desiredName.toLowerCase() === state.currentFileName.toLowerCase()) {
+    return;
+  }
+  let target = { path: `${state.currentPath}/${desiredName}`.replace("//", "/"), name: desiredName };
+  const dbxCheck = await ensureDropbox();
+  if (dbxCheck) {
+    try {
+      await dbxCheck.filesGetMetadata({ path: target.path });
+      const alt = await findAvailableFilePath(state.currentPath || "", base);
+      if (alt) {
+        target = alt;
+      }
+    } catch (error) {
+      const tag = error?.error?.error?.[".tag"];
+      if (!(tag === "path" || tag === "path/not_found")) {
+        console.error(error);
+      }
+    }
+  }
+  if (!target) return;
+  try {
+    await dbx.filesMoveV2({
+      from_path: state.currentFile,
+      to_path: target.path,
+      autorename: false,
+    });
+    state.currentFile = target.path;
+    state.currentFileName = target.name;
+    updateFooterFile();
+    updateTopbar();
+    setStatus("Renamed.", 1200);
+  } catch (error) {
+    console.error(error);
+    setStatus("Could not rename file.");
+  }
+}
+
+async function renameCurrentFolder() {
+  if (!state.currentPath) return;
+  const parts = state.currentPath.split("/").filter(Boolean);
+  const currentName = parts[parts.length - 1] || "";
+  const proposed = prompt("New folder name?", currentName);
+  if (!proposed) return;
+  const dbx = ensureDropbox();
+  if (!dbx) {
+    setStatus("Connect Dropbox first.");
+    return;
+  }
+  const trimmed = sanitizeFileTitle(proposed);
+  if (!trimmed) return;
+  const parent = "/" + parts.slice(0, -1).join("/");
+  const parentPath = parent === "/" ? "" : parent;
+  const target = await findAvailableFolderPath(parentPath, trimmed);
+  if (!target) return;
+  try {
+    await dbx.filesMoveV2({
+      from_path: state.currentPath,
+      to_path: target.path,
+      autorename: false,
+    });
+    state.currentPath = target.path;
+    state.lastPath = target.path;
+    saveSettings();
+    listFolder(target.path);
+    setStatus("Folder renamed.", 1200);
+  } catch (error) {
+    console.error(error);
+    setStatus("Could not rename folder.");
+  }
+}
+
 function escapeHtml(text) {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
@@ -503,15 +780,8 @@ function setCurrentMarkdown(md) {
   state.lastSavedContent = text;
   state.undoStack = [text];
   state.canUndo = false;
-  updateMenuUndoState();
   updateFooterFile();
   updateWordCount();
-}
-
-function updateMenuUndoState() {
-  if (!undoBtn) return;
-  const enabled = state.view === "editor" && state.undoStack.length > 1;
-  undoBtn.classList.toggle("is-disabled", !enabled);
 }
 
 function openConnectionSheet() {
@@ -835,7 +1105,6 @@ async function saveFile({ silent } = {}) {
     if (content !== state.lastSavedContent) {
       state.lastSavedContent = content;
       state.canUndo = true;
-      updateMenuUndoState();
     }
     if (silent) {
       setStatus("Saved", 900);
@@ -870,7 +1139,6 @@ function pushUndoState(value) {
   if (state.undoStack.length > 3) {
     state.undoStack.shift();
   }
-  updateMenuUndoState();
 }
 
 function scheduleUndoSnapshot() {
@@ -920,6 +1188,58 @@ function insertMarkdownAtCursor(text) {
   state.rawMarkdown = editorCode.value;
   updateWordCount();
   scheduleAutosave();
+}
+
+async function findAvailableFilePath(folderPath, baseTitle) {
+  const dbx = ensureDropbox();
+  if (!dbx) return null;
+  for (let i = 0; i < 50; i += 1) {
+    const suffix = i === 0 ? "" : ` (${i + 1})`;
+    const filename = `${baseTitle}${suffix}.md`;
+    const candidatePath = `${folderPath}/${filename}`.replace("//", "/");
+    try {
+      await dbx.filesGetMetadata({ path: candidatePath });
+    } catch (error) {
+      const tag = error?.error?.error?.[".tag"];
+      if (tag === "path" || tag === "path/not_found") {
+        return { path: candidatePath, name: filename };
+      }
+    }
+  }
+  return null;
+}
+
+function handleListContinue(event) {
+  if (event.key !== "Enter") return;
+  if (event.shiftKey) return;
+  const start = editorCode.selectionStart;
+  const end = editorCode.selectionEnd;
+  if (start !== end) return;
+  const value = editorCode.value;
+  const lineStart = value.lastIndexOf("\n", start - 1) + 1;
+  const line = value.slice(lineStart, start);
+  const match = line.match(/^(\s*)(-\s\[[ xX]\]\s+|[-*+]\s+|\d+[.)]\s+)/);
+  if (!match) return;
+  const indent = match[1];
+  const prefix = match[2];
+  const after = line.slice(match[0].length);
+  event.preventDefault();
+  if (!after.trim()) {
+    const before = value.slice(0, lineStart);
+    const afterAll = value.slice(start);
+    editorCode.value = before + indent + "\n" + indent + afterAll;
+    const nextPos = lineStart + indent.length + 1 + indent.length;
+    editorCode.selectionStart = editorCode.selectionEnd = nextPos;
+  } else {
+    const before = value.slice(0, start);
+    const afterAll = value.slice(start);
+    editorCode.value = before + "\n" + indent + prefix + afterAll;
+    const nextPos = start + 1 + indent.length + prefix.length;
+    editorCode.selectionStart = editorCode.selectionEnd = nextPos;
+  }
+  state.rawMarkdown = editorCode.value;
+  scheduleAutosave();
+  updateWordCount();
 }
 
 async function fileToImage(file) {
@@ -997,9 +1317,15 @@ async function uploadImageBlob(blob, originalName) {
 
 async function handleInsertImage(file) {
   if (!file || !state.currentFile) {
+    setStatus("Open a file first.", 1200);
+    return;
+  }
+  if (state.mode !== "edit") {
+    setStatus("Switch to edit mode to insert images.", 1200);
     return;
   }
   try {
+    setStatus(`Selected: ${file.name}`, 1200);
     setStatus("Preparing image...");
     const blob = await compressWithWatermark(file);
     if (!blob) {
@@ -1012,12 +1338,13 @@ async function handleInsertImage(file) {
       setStatus("Image upload failed.");
       return;
     }
+    setStatus("Inserting markdown...");
     const markdown = `![${name}](${name})\n`;
     insertMarkdownAtCursor(markdown);
     setStatus("Image inserted.", 1200);
   } catch (error) {
     console.error(error);
-    setStatus("Image upload failed.");
+    setStatus(`Image upload failed: ${error?.message || "unknown error"}`);
   }
 }
 
@@ -1042,7 +1369,7 @@ async function handleAuthRedirect() {
     window.history.replaceState({}, document.title, url.toString());
     state.dbx = new Dropbox.Dropbox({ accessToken });
     setStatus("Connected.", 1200);
-    listFolder("");
+    listFolder(state.lastPath || "");
     updateMenuAuth();
   } catch (error) {
     console.error(error);
@@ -1097,6 +1424,8 @@ function setupListeners() {
       imagePicker.value = "";
       imagePicker.click();
     });
+  }
+  if (imagePicker) {
     imagePicker.addEventListener("change", () => {
       const file = imagePicker.files && imagePicker.files[0];
       if (file) {
@@ -1189,6 +1518,27 @@ function setupListeners() {
       createFolder();
     });
   }
+  if (menuRenameFile) {
+    menuRenameFile.addEventListener("click", () => {
+      toggleMenu(false);
+      if (menuRenameFile.classList.contains("is-disabled")) return;
+      renameCurrentFile();
+    });
+  }
+  if (menuRenameFolder) {
+    menuRenameFolder.addEventListener("click", () => {
+      toggleMenu(false);
+      if (menuRenameFolder.classList.contains("is-disabled")) return;
+      renameCurrentFolder();
+    });
+  }
+  if (menuInsertTodo) {
+    menuInsertTodo.addEventListener("click", () => {
+      toggleMenu(false);
+      if (menuInsertTodo.classList.contains("is-disabled")) return;
+      insertMarkdownAtCursor("- [ ] ");
+    });
+  }
   if (menuInsertImage && imagePicker) {
     menuInsertImage.addEventListener("click", () => {
       toggleMenu(false);
@@ -1197,24 +1547,28 @@ function setupListeners() {
       imagePicker.click();
     });
   }
+  if (menuPinned) {
+    menuPinned.addEventListener("click", () => {
+      toggleMenu(false);
+      openPinnedFolders();
+    });
+  }
+  if (menuTheme) {
+    menuTheme.addEventListener("click", () => {
+      toggleMenu(false);
+      toggleTheme();
+    });
+  }
+  if (pinToggle) {
+    pinToggle.addEventListener("click", () => {
+      if (pinToggle.classList.contains("is-disabled")) return;
+      togglePinCurrentFolder();
+    });
+  }
   statusToggle.addEventListener("change", () => {
     saveSettings();
     document.querySelector(".status-footer").classList.toggle("is-hidden", !statusToggle.checked);
   });
-  if (undoBtn) {
-    undoBtn.addEventListener("click", () => {
-      if (state.undoStack.length <= 1) {
-        return;
-      }
-      state.undoStack.pop();
-      const next = state.undoStack[state.undoStack.length - 1] || "";
-      state.rawMarkdown = next;
-      editorCode.value = next;
-      updateWordCount();
-      updateMenuUndoState();
-      editorCode.focus();
-    });
-  }
   document.addEventListener("click", (event) => {
     if (!menuPanel.contains(event.target) && !menuToggle.contains(event.target)) {
       toggleMenu(false);
@@ -1233,6 +1587,7 @@ function setupListeners() {
     updateWordCount();
     scheduleUndoSnapshot();
   });
+  editorCode.addEventListener("keydown", handleListContinue);
   previewToggle.addEventListener("click", () => {
     setMode(state.mode === "edit" ? "preview" : "edit");
   });
@@ -1243,16 +1598,15 @@ function init() {
   setStatus("");
   setupListeners();
   loadSettings();
-  updateMenuUndoState();
   handleAuthRedirect();
 
   const dbx = ensureDropbox();
   if (dbx) {
     setStatus("Connected.", 800);
-    listFolder("");
+    listFolder(state.lastPath || "");
     updateMenuAuth();
   } else {
-    listFolder("");
+    listFolder(state.lastPath || "");
     updateMenuAuth();
   }
 }
