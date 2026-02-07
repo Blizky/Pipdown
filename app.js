@@ -16,15 +16,19 @@ const editUndoBtn = null;
 const statusToggle = document.getElementById("statusToggle");
 const menuTrashAction = document.getElementById("menuTrashAction");
 const menuCopy = document.getElementById("menuCopy");
+const menuNewFile = document.getElementById("menuNewFile");
+const menuNewFolder = document.getElementById("menuNewFolder");
+const menuInsertImage = document.getElementById("menuInsertImage");
 const deleteUndoBtn = null;
 const undoBtn = document.getElementById("undoBtn");
 const insertImageBtn = document.getElementById("insertImageBtn");
 const imagePicker = document.getElementById("imagePicker");
-const recoverSheet = document.getElementById("recoverSheet");
-const recoverYes = document.getElementById("recoverYes");
 const connectionSheet = document.getElementById("connectionSheet");
 const reconnectBtn = document.getElementById("reconnectBtn");
 const saveLocalBtn = document.getElementById("saveLocalBtn");
+const deleteSheet = document.getElementById("deleteSheet");
+const deleteYes = document.getElementById("deleteYes");
+const deleteNo = document.getElementById("deleteNo");
 const browserView = document.getElementById("browserView");
 const editorView = document.getElementById("editorView");
 const connectBtn = document.getElementById("connectBtn");
@@ -103,11 +107,9 @@ const state = {
   lastSavedContent: "",
   undoTimer: null,
   rawMarkdown: "",
-  isRecycledOpen: false,
-  recoverPromptedAt: 0,
-  recoverSheetOpen: false,
   connectionSheetOpen: false,
   tempRecoveryPath: null,
+  deleteSheetOpen: false,
 };
 
 function setStatus(message, timeout = 0) {
@@ -142,7 +144,7 @@ function saveSettings() {
 
 function setTitle(text) {
   if (titleText) {
-    titleText.textContent = "Pipdown";
+    titleText.textContent = text || "Pipdown";
   }
 }
 
@@ -152,9 +154,8 @@ function setView(view) {
   editorView.classList.toggle("is-active", view === "editor");
   if (view === "list") {
     editorCode.readOnly = false;
-    setRecycledOpen(false);
-    closeRecoverSheet();
     closeConnectionSheet();
+    closeDeleteSheet();
     state.canUndo = false;
     updateMenuUndoState();
   }
@@ -166,9 +167,17 @@ function setView(view) {
 function updateTopbar() {
   if (state.view === "editor") {
     setTitle(state.currentFileName || "Untitled");
+    const titleIcon = document.querySelector("#topbarTitle .topbar-icon");
+    if (titleIcon) {
+      titleIcon.src = "svg/file_line.svg";
+    }
   } else {
     const folderName = state.currentPath.split("/").filter(Boolean).pop();
     setTitle(folderName || "Pipdown");
+    const titleIcon = document.querySelector("#topbarTitle .topbar-icon");
+    if (titleIcon) {
+      titleIcon.src = "svg/folder_fill.svg";
+    }
   }
 
   const atRoot = !state.currentPath;
@@ -179,13 +188,25 @@ function updateTopbar() {
 function updateToolbarState() {
   const connected = Boolean(ensureDropbox());
   const inEditor = state.view === "editor";
-  const canEdit = inEditor && state.mode === "edit" && !state.isRecycledOpen;
+  const canEdit = inEditor && state.mode === "edit";
   previewToggle.classList.toggle("is-disabled", !inEditor);
-  newFileBtn.classList.toggle("is-disabled", !connected || inEditor);
-  newFolderBtn.classList.toggle("is-disabled", !connected || inEditor);
+  if (newFileBtn) {
+    newFileBtn.classList.toggle("is-disabled", !connected || inEditor);
+  }
+  if (newFolderBtn) {
+    newFolderBtn.classList.toggle("is-disabled", !connected || inEditor);
+  }
   if (insertImageBtn) {
     insertImageBtn.classList.toggle("is-disabled", !connected || !canEdit);
   }
+}
+
+function sanitizeFileTitle(title) {
+  const cleaned = title
+    .replace(/[\\/:*?"<>|]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return cleaned || "";
 }
 
 
@@ -200,7 +221,7 @@ function updateTrashMenuLabel() {
   const label = menuTrashAction.querySelector("span");
   if (!label) return;
   if (state.view === "editor") {
-    label.textContent = isRecycledName(state.currentFileName) ? "Recover File" : "Recicle File";
+    label.textContent = "Delete File";
     menuTrashAction.style.display = "flex";
   } else {
     menuTrashAction.style.display = "none";
@@ -208,12 +229,34 @@ function updateTrashMenuLabel() {
   if (menuCopy) {
     menuCopy.style.display = state.view === "editor" ? "flex" : "none";
   }
+  if (menuNewFile) {
+    menuNewFile.style.display = state.view === "list" ? "flex" : "none";
+    menuNewFile.classList.toggle("is-disabled", !ensureDropbox());
+  }
+  if (menuNewFolder) {
+    menuNewFolder.style.display = state.view === "list" ? "flex" : "none";
+    menuNewFolder.classList.toggle("is-disabled", !ensureDropbox());
+  }
+  if (menuInsertImage) {
+    menuInsertImage.style.display = state.view === "editor" ? "flex" : "none";
+    menuInsertImage.classList.toggle("is-disabled", !ensureDropbox());
+  }
 }
 
 function toggleMenu(open) {
   const willOpen = typeof open === "boolean" ? open : !menuPanel.classList.contains("is-open");
   menuPanel.classList.toggle("is-open", willOpen);
   menuPanel.setAttribute("aria-hidden", String(!willOpen));
+  if (willOpen) {
+    positionMenu();
+  }
+}
+
+function positionMenu() {
+  const rect = menuToggle.getBoundingClientRect();
+  menuPanel.style.top = `${rect.bottom + 8}px`;
+  const rightOffset = Math.max(12, window.innerWidth - rect.right);
+  menuPanel.style.right = `${rightOffset}px`;
 }
 
 function clearAuth() {
@@ -256,6 +299,7 @@ async function listFolder(path = "") {
     });
     renderFileList(entries);
     setView("list");
+    updateFooterFile();
     setStatus("");
   } catch (error) {
     console.error(error);
@@ -277,13 +321,6 @@ function renderFileList(entries) {
     const bIsFolder = b[".tag"] === "folder";
     if (aIsFolder !== bIsFolder) {
       return aIsFolder ? -1 : 1;
-    }
-    if (!aIsFolder && !bIsFolder) {
-      const aRecycled = a.name.toLowerCase().startsWith("(recicled)");
-      const bRecycled = b.name.toLowerCase().startsWith("(recicled)");
-      if (aRecycled !== bRecycled) {
-        return aRecycled ? 1 : -1;
-      }
     }
     return a.name.localeCompare(b.name);
   });
@@ -327,9 +364,6 @@ function renderFileList(entries) {
       meta.textContent = "File";
     }
 
-    if (entry.name.toLowerCase().startsWith("(recicled)")) {
-      item.classList.add("is-deleted");
-    }
     item.appendChild(icon);
     item.appendChild(label);
     item.appendChild(meta);
@@ -361,7 +395,6 @@ async function handleEntry(entry, item) {
     state.currentFile = entry.path_lower;
     state.currentFileName = entry.name;
     setCurrentMarkdown(text);
-    setRecycledOpen(isRecycledName(entry.name));
     setMode("edit");
     setView("editor");
     setStatus("");
@@ -379,73 +412,16 @@ async function deleteCurrentFile() {
   if (!dbx || !state.currentFileName) {
     return;
   }
-  const prefix = "(recicled) ";
-  const currentName = state.currentFileName;
-  const isRecycled = isRecycledName(currentName);
-  if (isRecycled) {
-    await recoverCurrentFile();
-    return;
-  }
-  const nextName = `${prefix}${currentName}`;
-  const fromPath = `${state.currentPath}/${currentName}`.replace("//", "/");
-  const toPath = `${state.currentPath}/${nextName}`.replace("//", "/");
   try {
-    await dbx.filesMoveV2({
-      from_path: fromPath,
-      to_path: toPath,
-      autorename: true,
-    });
-    setStatus("Recicled.", 1200);
+    await dbx.filesDeleteV2({ path: state.currentFile });
+    setStatus("Deleted.", 1200);
     state.currentFile = null;
     state.currentFileName = "";
     setView("list");
     listFolder(state.currentPath || "");
   } catch (error) {
     console.error(error);
-    setStatus("Could not recicle file.");
-  }
-}
-
-function isRecycledName(name) {
-  if (!name) return false;
-  return name.toLowerCase().startsWith("(recicled) ");
-}
-
-async function recoverCurrentFile() {
-  const dbx = ensureDropbox();
-  if (!dbx || !state.currentFileName) {
-    return false;
-  }
-  if (!isRecycledName(state.currentFileName)) {
-    return false;
-  }
-  const prefix = "(recicled) ";
-  const currentName = state.currentFileName;
-  const nextName = currentName.slice(prefix.length);
-  const fromPath = `${state.currentPath}/${currentName}`.replace("//", "/");
-  const toPath = `${state.currentPath}/${nextName}`.replace("//", "/");
-  try {
-    await dbx.filesMoveV2({
-      from_path: fromPath,
-      to_path: toPath,
-      autorename: true,
-    });
-    const response = await dbx.filesDownload({ path: toPath });
-    const blob = response.result.fileBlob;
-    const text = await blob.text();
-    state.currentFile = toPath;
-    state.currentFileName = nextName;
-    setCurrentMarkdown(text);
-    setRecycledOpen(false);
-    setMode("edit");
-    setView("editor");
-    updateFooterFile();
-    setStatus("FILE WAS RECOVERED", 2000);
-    return true;
-  } catch (error) {
-    console.error(error);
-    setStatus("Could not recover file.");
-    return false;
+    setStatus("Could not delete file.");
   }
 }
 
@@ -475,7 +451,8 @@ async function createFile() {
     setStatus("Connect Dropbox first.");
     return;
   }
-  const trimmed = name.trim();
+  const trimmed = sanitizeFileTitle(name);
+  if (!trimmed) return;
   const fileName = trimmed.toLowerCase().endsWith(".md") ? trimmed : `${trimmed}.md`;
   const path = `${state.currentPath}/${fileName}`.replace("//", "/");
   try {
@@ -537,26 +514,6 @@ function updateMenuUndoState() {
   undoBtn.classList.toggle("is-disabled", !enabled);
 }
 
-function setRecycledOpen(isRecycled) {
-  state.isRecycledOpen = isRecycled;
-  editorView.classList.toggle("is-recycled", isRecycled);
-  editorCode.readOnly = isRecycled;
-}
-
-function openRecoverSheet() {
-  if (!recoverSheet || state.recoverSheetOpen) return;
-  state.recoverSheetOpen = true;
-  recoverSheet.classList.add("is-open");
-  recoverSheet.setAttribute("aria-hidden", "false");
-}
-
-function closeRecoverSheet() {
-  if (!recoverSheet) return;
-  state.recoverSheetOpen = false;
-  recoverSheet.classList.remove("is-open");
-  recoverSheet.setAttribute("aria-hidden", "true");
-}
-
 function openConnectionSheet() {
   if (!connectionSheet || state.connectionSheetOpen) return;
   state.connectionSheetOpen = true;
@@ -569,6 +526,20 @@ function closeConnectionSheet() {
   state.connectionSheetOpen = false;
   connectionSheet.classList.remove("is-open");
   connectionSheet.setAttribute("aria-hidden", "true");
+}
+
+function openDeleteSheet() {
+  if (!deleteSheet || state.deleteSheetOpen) return;
+  state.deleteSheetOpen = true;
+  deleteSheet.classList.add("is-open");
+  deleteSheet.setAttribute("aria-hidden", "false");
+}
+
+function closeDeleteSheet() {
+  if (!deleteSheet) return;
+  state.deleteSheetOpen = false;
+  deleteSheet.classList.remove("is-open");
+  deleteSheet.setAttribute("aria-hidden", "true");
 }
 
 function openOfflineDB() {
@@ -737,7 +708,6 @@ async function openFileByPath(path, nameHint) {
     state.currentFile = path;
     state.currentFileName = nameHint || path.split("/").pop() || "";
     setCurrentMarkdown(text);
-    setRecycledOpen(isRecycledName(state.currentFileName));
     setMode("edit");
     setView("editor");
     updateFooterFile();
@@ -749,12 +719,13 @@ async function openFileByPath(path, nameHint) {
 function updateFooterFile() {
   const el = document.getElementById("footerFile");
   if (!el) return;
-  if (!state.currentFileName) {
-    el.textContent = "";
-    return;
+  let path = "";
+  if (state.view === "editor" && state.currentFileName) {
+    path = `${state.currentPath || ""}/${state.currentFileName}`.replace("//", "/");
+  } else {
+    path = state.currentPath || "";
   }
-  const rawPath = `${state.currentPath || ""}/${state.currentFileName}`.replace("//", "/");
-  let path = rawPath.endsWith("/") ? rawPath.slice(0, -1) : rawPath;
+  path = path.replace(/\/+$/, "");
   if (path.startsWith("/")) {
     path = path.slice(1);
   }
@@ -938,10 +909,6 @@ function handlePaste(event) {
   updateWordCount();
 }
 
-function maybePromptRecover() {
-  if (!state.isRecycledOpen) return;
-  openRecoverSheet();
-}
 
 function insertMarkdownAtCursor(text) {
   const start = editorCode.selectionStart;
@@ -1112,12 +1079,16 @@ function disconnectDropbox() {
 function setupListeners() {
   backBtn.addEventListener("click", goBack);
   connectBtn.addEventListener("click", connectDropbox);
-  newFileBtn.addEventListener("click", () => {
-    createFile();
-  });
-  newFolderBtn.addEventListener("click", () => {
-    createFolder();
-  });
+  if (newFileBtn) {
+    newFileBtn.addEventListener("click", () => {
+      createFile();
+    });
+  }
+  if (newFolderBtn) {
+    newFolderBtn.addEventListener("click", () => {
+      createFolder();
+    });
+  }
   if (insertImageBtn && imagePicker) {
     insertImageBtn.addEventListener("click", () => {
       if (insertImageBtn.classList.contains("is-disabled")) {
@@ -1133,14 +1104,6 @@ function setupListeners() {
       }
     });
   }
-  if (recoverSheet) {
-    recoverSheet.addEventListener("click", (event) => {
-      const target = event.target;
-      if (target && target.getAttribute("data-close") === "true") {
-        closeRecoverSheet();
-      }
-    });
-  }
   if (connectionSheet) {
     connectionSheet.addEventListener("click", (event) => {
       const target = event.target;
@@ -1149,16 +1112,11 @@ function setupListeners() {
       }
     });
   }
-  if (recoverYes) {
-    recoverYes.addEventListener("click", async () => {
-      if (recoverYes.classList.contains("is-loading")) {
-        return;
-      }
-      recoverYes.classList.add("is-loading");
-      const recovered = await recoverCurrentFile();
-      recoverYes.classList.remove("is-loading");
-      if (recovered) {
-        closeRecoverSheet();
+  if (deleteSheet) {
+    deleteSheet.addEventListener("click", (event) => {
+      const target = event.target;
+      if (target && target.getAttribute("data-close") === "true") {
+        closeDeleteSheet();
       }
     });
   }
@@ -1187,9 +1145,20 @@ function setupListeners() {
   menuTrashAction.addEventListener("click", () => {
     toggleMenu(false);
     if (state.view === "editor") {
-      deleteCurrentFile();
+      openDeleteSheet();
     }
   });
+  if (deleteYes) {
+    deleteYes.addEventListener("click", async () => {
+      closeDeleteSheet();
+      await deleteCurrentFile();
+    });
+  }
+  if (deleteNo) {
+    deleteNo.addEventListener("click", () => {
+      closeDeleteSheet();
+    });
+  }
   if (menuCopy) {
     menuCopy.addEventListener("click", async () => {
       toggleMenu(false);
@@ -1204,6 +1173,28 @@ function setupListeners() {
         console.error(error);
         setStatus("Copy failed.", 1200);
       }
+    });
+  }
+  if (menuNewFile) {
+    menuNewFile.addEventListener("click", () => {
+      toggleMenu(false);
+      if (menuNewFile.classList.contains("is-disabled")) return;
+      createFile();
+    });
+  }
+  if (menuNewFolder) {
+    menuNewFolder.addEventListener("click", () => {
+      toggleMenu(false);
+      if (menuNewFolder.classList.contains("is-disabled")) return;
+      createFolder();
+    });
+  }
+  if (menuInsertImage && imagePicker) {
+    menuInsertImage.addEventListener("click", () => {
+      toggleMenu(false);
+      if (menuInsertImage.classList.contains("is-disabled")) return;
+      imagePicker.value = "";
+      imagePicker.click();
     });
   }
   statusToggle.addEventListener("change", () => {
@@ -1229,6 +1220,11 @@ function setupListeners() {
       toggleMenu(false);
     }
   });
+  window.addEventListener("resize", () => {
+    if (menuPanel.classList.contains("is-open")) {
+      positionMenu();
+    }
+  });
 
   editorCode.addEventListener("paste", handlePaste);
   editorCode.addEventListener("input", () => {
@@ -1237,9 +1233,6 @@ function setupListeners() {
     updateWordCount();
     scheduleUndoSnapshot();
   });
-  editorCode.addEventListener("mousedown", maybePromptRecover);
-  editorCode.addEventListener("focus", maybePromptRecover);
-  editorPreview.addEventListener("click", maybePromptRecover);
   previewToggle.addEventListener("click", () => {
     setMode(state.mode === "edit" ? "preview" : "edit");
   });
