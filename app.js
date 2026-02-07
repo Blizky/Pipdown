@@ -37,6 +37,7 @@ const deleteNo = document.getElementById("deleteNo");
 const browserView = document.getElementById("browserView");
 const editorView = document.getElementById("editorView");
 const connectBtn = document.getElementById("connectBtn");
+const startBrand = document.getElementById("startBrand");
 const editorPreview = document.getElementById("editorPreview");
 const wordCountEl = document.getElementById("wordCount");
 
@@ -471,11 +472,17 @@ async function listFolder(path = "") {
     setStatus("Connect Dropbox to browse files.");
     fileList.innerHTML = "";
     connectBtn.classList.remove("is-hidden");
+    if (startBrand) {
+      startBrand.classList.remove("is-hidden");
+    }
     setView("list");
     return;
   }
 
   connectBtn.classList.add("is-hidden");
+  if (startBrand) {
+    startBrand.classList.add("is-hidden");
+  }
   try {
     setStatus("Loading...");
     state.listMode = "normal";

@@ -117,12 +117,41 @@ body.theme-dark {
   flex: 0 0 auto;
 }
 
+.topbar-logo {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+}
+
 .topbar-text {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 24vw;
   font-weight: 700;
+  color: var(--ui);
+}
+
+.start-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8vh;
+}
+
+.start-logo {
+  width: 48px;
+  height: 48px;
+}
+
+.start-title {
+  font-family: var(--title-font);
+  font-size: 1.1rem;
+  letter-spacing: 0.12em;
+  color: #FA8334;
+  font-weight: 700;
+  text-transform: uppercase;
 }
 
 .back-icon {
@@ -598,7 +627,7 @@ body.theme-dark {
   letter-spacing: 0.12em;
   text-transform: uppercase;
   cursor: pointer;
-  margin-top: 18vh;
+  margin-top: 6vh;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -611,6 +640,10 @@ body.theme-dark {
 }
 
 .primary-btn.is-hidden {
+  display: none;
+}
+
+.start-brand.is-hidden {
   display: none;
 }
 
