@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg width="24" height="24" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" xmlns:bx="https://boxy-svg.com">
+  <defs>
+    <bx:guide x="10.043" y="9" angle="90"/>
+  </defs>
+  <path fill-rule="evenodd" clip-rule="evenodd" d="M 3 9.5 C 3 7.017 4.992 6 7 6 L 7 2.5 C 7 2.224 7.224 2 7.5 2 C 7.776 2 8 2.224 8 2.5 L 8 6 L 8 11.9 L 9 11.9 L 9 2.5 C 9 2.224 9.224 2 9.5 2 C 9.776 2 10 2.224 10 2.5 L 10 11.9 L 11.5 11.9 C 11.804 11.9 12.05 12.146 12.05 12.45 C 12.05 12.754 11.804 13 11.5 13 L 9.5 13 L 8 13 L 7.5 13 L 7 13 C 4.992 13 3 11.983 3 9.5 Z" style="transform-origin: 7.525px 7.5px 0px; fill: rgb(250, 131, 52);" transform="matrix(-1, 0, 0, -1, 0, 0)"/>
+  <path d="M -5.528 -12.296 Q -5.528 -12.716 -5.244 -12.296 L -3.628 -9.905 Q -3.344 -9.485 -3.628 -9.485 L -5.244 -9.485 Q -5.528 -9.485 -5.528 -9.905 Z" bx:shape="triangle -5.528 -12.716 2.184 3.231 0 0.13 1@772434d1" style="fill: rgb(250, 131, 52); paint-order: stroke; stroke: rgb(250, 131, 52);" transform="matrix(-1, 0, 0, -1, 0, 0)"/>
+</svg>
