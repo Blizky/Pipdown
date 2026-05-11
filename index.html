@@ -8,8 +8,8 @@
     />
     <meta name="theme-color" content="#070707" />
     <title>Pipdown</title>
-    <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="stylesheet" href="/styles/app.css" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="stylesheet" href="./styles/app.css" />
   </head>
   <body>
     <div id="app" class="app-shell">
@@ -19,7 +19,7 @@
           <h1>Pipdown</h1>
         </div>
         <button id="settingsToggle" class="icon-button icon-only" type="button" aria-label="Open settings">
-          <img src="/assets/icons/menu_fill.svg" alt="" />
+          <img src="./assets/icons/menu_fill.svg" alt="" />
         </button>
       </header>
 
@@ -92,7 +92,7 @@
               </span>
             </div>
             <button id="exportButton" class="primary-button icon-only" type="button" aria-label="Create digest">
-              <img src="/assets/icons/download_line.svg" alt="" />
+              <img src="./assets/icons/download_line.svg" alt="" />
             </button>
           </div>
           <div id="exportResult" class="export-result" hidden></div>
@@ -103,16 +103,16 @@
       <section id="digestPreviewModal" class="digest-modal" hidden>
         <div class="digest-modal-toolbar">
           <button id="digestPreviewSave" class="digest-modal-icon" type="button" aria-label="Save digest">
-            <img src="/assets/icons/download_fill.svg" alt="" />
+            <img src="./assets/icons/download_fill.svg" alt="" />
           </button>
           <button id="digestPreviewClose" class="digest-modal-icon" type="button" aria-label="Close preview">
-            <img src="/assets/icons/close_fill.svg" alt="" />
+            <img src="./assets/icons/close_fill.svg" alt="" />
           </button>
         </div>
         <video id="digestPreviewVideo" controls playsinline></video>
       </section>
     </div>
 
-    <script type="module" src="/src/main.js"></script>
+    <script type="module" src="./src/main.js"></script>
   </body>
 </html>

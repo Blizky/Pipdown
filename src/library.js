@@ -92,16 +92,16 @@ export class LibraryController {
           <img class="snap-thumb-large" src="${snap.stillUrl}" alt="Snap thumbnail" />
           <strong class="snap-time">${new Date(snap.timestamp).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</strong>
           <button type="button" data-action="star" data-snap-id="${snap.id}" class="icon-action overlay top-right" aria-label="Toggle favorite">
-            <img src="/assets/icons/${snap.highlight ? "star_fill" : "star_line"}.svg" alt="" />
+            <img src="./assets/icons/${snap.highlight ? "star_fill" : "star_line"}.svg" alt="" />
           </button>
           <button type="button" data-action="left" data-snap-id="${snap.id}" class="icon-action overlay bottom-left" aria-label="Move earlier">
-            <img src="/assets/icons/square_arrow_left_fill.svg" alt="" />
+            <img src="./assets/icons/square_arrow_left_fill.svg" alt="" />
           </button>
           <button type="button" data-action="right" data-snap-id="${snap.id}" class="icon-action overlay bottom-mid" aria-label="Move later">
-            <img src="/assets/icons/square_arrow_right_fill.svg" alt="" />
+            <img src="./assets/icons/square_arrow_right_fill.svg" alt="" />
           </button>
           <button type="button" data-action="delete" data-snap-id="${snap.id}" class="icon-action overlay bottom-right" aria-label="Delete snap">
-            <img src="/assets/icons/delete_2_fill.svg" alt="" />
+            <img src="./assets/icons/delete_2_fill.svg" alt="" />
           </button>
         </div>
       </article>
