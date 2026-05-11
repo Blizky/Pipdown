@@ -71,19 +71,25 @@ export class CameraController {
     this.recordingOverlay.hidden = false;
     this.recordingStatus.textContent = `Recording ${durationSeconds}s`;
     this.animateProgress(durationSeconds * 1000);
-    let blob;
+    let blob = null;
     try {
       blob = await recordBlobFromStream(this.stream, durationSeconds);
     } catch (error) {
-      if (!supportsCanvasCapture()) throw error;
+      if (!supportsCanvasCapture()) {
+        throw error;
+      }
       this.recordingStatus.textContent = "Recording fallback...";
       blob = await recordBlobFromCanvas(this.video, durationSeconds);
+    } finally {
+      this.isRecording = false;
+      this.recordingOverlay.hidden = true;
+      this.canvas.classList.remove("is-visible");
+      cancelAnimationFrame(this.progressAnimation);
     }
 
-    this.isRecording = false;
-    this.recordingOverlay.hidden = true;
-    this.canvas.classList.remove("is-visible");
-    cancelAnimationFrame(this.progressAnimation);
+    if (!blob) {
+      throw new Error("No video data captured. Try a different camera or reload the page.");
+    }
     this.status.textContent = "Saved";
     return blob;
   }

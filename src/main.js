@@ -77,6 +77,8 @@ const library = new LibraryController({
 let settings;
 
 async function init() {
+  await requestPersistentStorage();
+
   settings = await settingsController.init(
     async (nextSettings, change) => {
       settings = nextSettings;
@@ -171,10 +173,28 @@ function bindCapture() {
     } catch (error) {
       els.status.textContent = `Capture failed: ${error?.message || "Unknown error"}`;
       console.error(error);
+      await restartCameraAfterFailure();
     } finally {
       els.shutter.disabled = false;
     }
   });
+}
+
+async function restartCameraAfterFailure() {
+  try {
+    await startCamera();
+  } catch (_error) {
+    // Keep original failure visible; user can retry with tap-to-start.
+  }
+}
+
+async function requestPersistentStorage() {
+  if (!navigator.storage?.persist) return;
+  try {
+    await navigator.storage.persist();
+  } catch (_error) {
+    // Best effort only.
+  }
 }
 
 async function handleSnapMutation({ action, dateKey }) {
