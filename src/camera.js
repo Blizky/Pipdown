@@ -29,6 +29,8 @@ export class CameraController {
       audio: false,
     });
 
+    await applyVideoTrackTuning(this.stream);
+
     this.video.srcObject = this.stream;
     await this.video.play();
     this.placeholder.hidden = true;
@@ -124,14 +126,18 @@ function pickMimeType() {
 
 function createRecorder(stream) {
   const preferred = pickMimeType();
+  const common = {
+    videoBitsPerSecond: 6_000_000,
+  };
   const attempts = preferred
-    ? [preferred, "", "video/mp4", "video/webm"]
-    : ["", "video/mp4", "video/webm"];
+    ? [{ mimeType: preferred }, {}, { mimeType: "video/mp4" }, { mimeType: "video/webm" }]
+    : [{}, { mimeType: "video/mp4" }, { mimeType: "video/webm" }];
 
   let lastError;
-  for (const mimeType of attempts) {
+  for (const variant of attempts) {
     try {
-      return mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      const options = { ...common, ...variant };
+      return Object.keys(options).length ? new MediaRecorder(stream, options) : new MediaRecorder(stream);
     } catch (error) {
       lastError = error;
     }
@@ -158,7 +164,7 @@ async function recordBlobFromStream(stream, durationSeconds) {
     recorder.onerror = () => reject(recorder.error || new Error("Recorder error."));
   });
 
-  recorder.start(250);
+  recorder.start();
   await sleep(durationSeconds * 1000);
   if (recorder.state !== "inactive") {
     try {
@@ -212,4 +218,46 @@ function getCaptureTarget(aspectRatio) {
     "1:1": { width: 1200, height: 1200, aspect: 1 },
   };
   return table[aspectRatio] || table["1:1"];
+}
+
+async function applyVideoTrackTuning(stream) {
+  const track = stream?.getVideoTracks?.()[0];
+  if (!track?.applyConstraints) return;
+
+  const base = {
+    frameRate: { ideal: 30, max: 30 },
+  };
+
+  try {
+    await track.applyConstraints(base);
+  } catch {
+    // ignore unsupported frame tuning
+  }
+
+  const capabilities = track.getCapabilities ? track.getCapabilities() : {};
+  const advanced = {};
+
+  if (Array.isArray(capabilities.focusMode) && capabilities.focusMode.includes("continuous")) {
+    advanced.focusMode = "continuous";
+  }
+  if (Array.isArray(capabilities.whiteBalanceMode) && capabilities.whiteBalanceMode.includes("continuous")) {
+    advanced.whiteBalanceMode = "continuous";
+  }
+  if (Array.isArray(capabilities.exposureMode) && capabilities.exposureMode.includes("continuous")) {
+    advanced.exposureMode = "continuous";
+  }
+  if (typeof capabilities.exposureCompensation?.min === "number" && typeof capabilities.exposureCompensation?.max === "number") {
+    // Prefer neutral compensation when supported.
+    advanced.exposureCompensation = Math.min(
+      capabilities.exposureCompensation.max,
+      Math.max(capabilities.exposureCompensation.min, 0),
+    );
+  }
+
+  if (!Object.keys(advanced).length) return;
+  try {
+    await track.applyConstraints({ advanced: [advanced] });
+  } catch {
+    // ignore advanced tuning failures
+  }
 }
