@@ -12,7 +12,7 @@ export async function exportDigest(dayData) {
     highlightSnapId: highlight?.id || "",
     favoriteMaxDurationSec: 3,
   };
-  const signature = getDigestSignature(dayData.snaps, dayData.aspectRatio);
+  const signature = getDigestSignature(dayData.snaps, dayData.aspectRatio, `${dayData.dateKey}|${String(dayData.userName || "").trim()}`);
 
   if (!orderedSnaps.length) {
     throw new Error("No snaps to export.");
@@ -23,6 +23,7 @@ export async function exportDigest(dayData) {
       dateKey: dayData.dateKey,
       snaps: dayData.snaps,
       aspectRatio: dayData.aspectRatio,
+      userName: dayData.userName,
     });
     return {
       ...cachedResult,
@@ -51,6 +52,7 @@ export async function exportDigest(dayData) {
       dateKey: dayData.dateKey,
       snaps: dayData.snaps,
       aspectRatio: dayData.aspectRatio,
+      userName: dayData.userName,
     });
     return {
       ...cachedResult,

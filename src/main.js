@@ -212,6 +212,7 @@ function queueDigestRefresh(dateKey) {
         dateKey,
         snaps,
         aspectRatio: settings.aspectRatio,
+        userName: settings.userName,
       });
       els.status.textContent = "Digest ready";
     } catch (_error) {

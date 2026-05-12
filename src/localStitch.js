@@ -118,6 +118,7 @@ export async function stitchSnapsLocally(snaps, options = {}) {
   ctx.imageSmoothingQuality = "high";
 
   const outputFps = 30;
+  const frameMs = Math.round(1000 / outputFps);
   const stream = canvas.captureStream(outputFps);
   const mimeType = pickMimeType();
   const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
@@ -151,6 +152,15 @@ export async function stitchSnapsLocally(snaps, options = {}) {
         totalClips: snaps.length,
         progress: (i + 1) / snaps.length,
       });
+    }
+
+    if (options.outro) {
+      const durationSec = Math.max(0, Number(options.outro.durationSec) || 0);
+      const frames = Math.round(durationSec * outputFps);
+      for (let i = 0; i < frames; i += 1) {
+        drawOutroCard(ctx, width, height, options.outro);
+        await sleep(frameMs);
+      }
     }
   } finally {
     if (recorder.state !== "inactive") {
@@ -188,4 +198,26 @@ function drawContain(ctx, sourceVideo, targetWidth, targetHeight) {
   ctx.fillStyle = "#000";
   ctx.fillRect(0, 0, targetWidth, targetHeight);
   ctx.drawImage(sourceVideo, dx, dy, dw, dh);
+}
+
+function drawOutroCard(ctx, width, height, outro) {
+  const dateText = String(outro?.date || "");
+  const userName = String(outro?.userName || "").trim() || "Unknown";
+  const appName = String(outro?.appName || "Pipdown");
+
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0, 0, width, height);
+
+  const mainSize = Math.max(30, Math.round(width * 0.07));
+  const subSize = Math.max(22, Math.round(width * 0.05));
+  const gap = Math.round(mainSize * 1.2);
+
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#f4f0e8";
+  ctx.font = `700 ${mainSize}px ui-rounded, Avenir Next, Trebuchet MS, sans-serif`;
+  ctx.fillText(dateText, width / 2, height / 2 - gap);
+
+  ctx.font = `500 ${subSize}px ui-rounded, Avenir Next, Trebuchet MS, sans-serif`;
+  ctx.fillText(`made by ${userName}`, width / 2, height / 2);
+  ctx.fillText(`on ${appName}`, width / 2, height / 2 + gap);
 }

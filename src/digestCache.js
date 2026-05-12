@@ -1,18 +1,20 @@
 import { stitchSnapsLocally } from "./localStitch.js";
 import { getCachedDigest, putCachedDigest } from "./storage.js";
+import { APP_NAME } from "./config.js";
 
-function buildSignature(snaps, aspectRatio) {
+function buildSignature(snaps, aspectRatio, outroKey = "") {
   const ordered = snaps.sort((a, b) => a.orderIndex - b.orderIndex);
   const ids = ordered.map((snap) => snap.id).join("|");
-  return `${aspectRatio}::${ids}`;
+  return `${aspectRatio}::${ids}::${outroKey}`;
 }
 
-export function getDigestSignature(snaps, aspectRatio) {
-  return buildSignature(snaps, aspectRatio);
+export function getDigestSignature(snaps, aspectRatio, outroKey = "") {
+  return buildSignature(snaps, aspectRatio, outroKey);
 }
 
-export async function ensureLocalDigestCache({ dateKey, snaps, aspectRatio }) {
-  const signature = buildSignature(snaps, aspectRatio);
+export async function ensureLocalDigestCache({ dateKey, snaps, aspectRatio, userName = "" }) {
+  const outroKey = `${dateKey}|${String(userName || "").trim()}`;
+  const signature = buildSignature(snaps, aspectRatio, outroKey);
   const cached = await getCachedDigest(dateKey);
   if (cached && cached.signature === signature) return cachedToResult(cached);
 
@@ -22,6 +24,12 @@ export async function ensureLocalDigestCache({ dateKey, snaps, aspectRatio }) {
   const blob = await stitchSnapsLocally(ordered, {
     aspectRatio,
     preserveCaptureAspect: true,
+    outro: {
+      durationSec: 2,
+      date: dateKey,
+      userName,
+      appName: APP_NAME,
+    },
   });
   await putCachedDigest({
     dateKey,
