@@ -80,7 +80,8 @@ export class CameraController {
       if (!supportsCanvasCapture()) {
         throw error;
       }
-      this.recordingStatus.textContent = "Recording fallback...";
+      console.warn("Primary recording path failed, using fallback recorder.", error);
+      this.recordingStatus.textContent = `Recording ${durationSeconds}s`;
       blob = await recordBlobFromCanvas(this.video, durationSeconds);
     } finally {
       this.isRecording = false;
@@ -164,7 +165,7 @@ async function recordBlobFromStream(stream, durationSeconds) {
     recorder.onerror = () => reject(recorder.error || new Error("Recorder error."));
   });
 
-  recorder.start();
+  recorder.start(250);
   await sleep(durationSeconds * 1000);
   if (recorder.state !== "inactive") {
     try {
